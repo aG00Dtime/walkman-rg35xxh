@@ -58,6 +58,22 @@ Walkman intentionally uses JSON files rather than SQLite or another database.
 This keeps the port self-contained and avoids relying on additional libraries
 being installed on the handheld.
 
+### Library sections
+
+- **All Songs** lists every audio track in the music folder.
+- **Media** lists every supported video and picture in the video folder and
+  shows its generated thumbnail.
+- **Albums** and **Artists** group music using cached tag information.
+- **Folders** follows the music folder structure.
+- **Favorites** stores tracks you mark for quick access.
+- **Recent** shows recently played tracks.
+- **Playlists** reads local `.m3u` and `.m3u8` files.
+
+The Library also provides the current mini-player, the Y-button Settings
+shortcut, and access to the Now Playing and details screens. Audio playback
+keeps running while browsing, and the player can recover its progress display
+if mpv's local control connection briefly drops.
+
 ## Device requirements
 
 - Anbernic RG35XX H.
@@ -76,15 +92,19 @@ computer connection after installation.
 ## Installation from a release ZIP
 
 1. Download `walkman-rg35xxh.zip` from the repository's Releases page.
-2. Extract the ZIP on a computer. It contains a folder named `walkman`.
+2. Extract the ZIP on a computer. It contains a folder named `walkman` with
+   `Walkman.sh`, the Python player, artwork, and the empty media folders.
 3. Insert the KNULLI SD card into the computer.
 4. Open the card's `roms/ports/` directory.
-5. Copy the complete `walkman` folder into `roms/ports/`.
-6. Safely eject the card and return it to the RG35XX H.
-7. Open the KNULLI Ports menu and launch **Walkman**.
-8. Copy audio files to `roms/ports/walkman/music/` and videos or pictures to
+5. Copy the complete `walkman` folder into `roms/ports/`. The launcher file
+   must end up at `roms/ports/walkman/Walkman.sh`; do not copy a second
+   `Walkman.sh` into the top level of `roms/ports/`.
+6. Update the Ports game list as described below so Walkman appears in KNULLI.
+7. Safely eject the card and return it to the RG35XX H.
+8. Open the KNULLI Ports menu and launch **Walkman**.
+9. Copy audio files to `roms/ports/walkman/music/` and videos or pictures to
    `roms/ports/walkman/video/`.
-9. Relaunch Walkman, then open **All Songs** or **Media**. The first scan may
+10. Relaunch Walkman, then open **All Songs** or **Media**. The first scan may
    take a little time while metadata and thumbnails are prepared.
 
 For an update, close Walkman and copy the new release's `walkman` folder over
@@ -103,7 +123,33 @@ contents; they contain your local library and preferences.
 6. Launch `Walkman.sh` from the KNULLI Ports menu.
 
 The included `gameinfo.xml` provides the PortMaster/KNULLI display metadata.
-`Walkman.sh` creates the launcher thumbnail entry when needed.
+`Walkman.sh` creates the launcher thumbnail entry when an existing Walkman
+game-list entry is present.
+
+## Add Walkman to the KNULLI game list
+
+If KNULLI does not add the port automatically, edit the SD card's
+`roms/ports/gamelist.xml` and add this entry inside `<gameList>`:
+
+```xml
+<game>
+  <path>./walkman/Walkman.sh</path>
+  <name>Walkman</name>
+  <desc>A cassette-style music and media player for the RG35XX H.</desc>
+  <genre>Media</genre>
+  <image>./walkman/cover.png</image>
+</game>
+```
+
+Save the file, safely eject the card, and restart or refresh the KNULLI Ports
+menu. If Walkman is already listed, edit that existing entry instead of
+adding another one. Keep only the nested path `./walkman/Walkman.sh`; a second
+entry such as `./Walkman.sh` creates duplicate Walkman items.
+
+When installing from the GitHub source ZIP rather than the release asset,
+create `roms/ports/walkman/` yourself and copy the repository's `Walkman.sh`,
+`player.py`, `design.py`, assets, `music/`, and `video/` contents into it before
+updating `gamelist.xml`.
 
 ## Controls
 
