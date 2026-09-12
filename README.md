@@ -4,6 +4,14 @@ Walkman is a local music and media player for the Anbernic RG35XX H running
 KNULLI Linux. It is packaged as a PortMaster port and uses a controller-first
 interface designed for the handheld's 640×480 screen.
 
+## Screenshots
+
+These captures were taken directly from an RG35XX H running the current port.
+
+| Library | Viz / Now Playing | Cassette player |
+|---|---|---|
+| ![Walkman library screen](docs/screenshots/walkman-library.png) | ![Walkman visualizer and now-playing screen](docs/screenshots/walkman-now-playing.png) | ![Walkman cassette player screen](docs/screenshots/walkman-cassette.png) |
+
 ## What the app does
 
 ### Music playback

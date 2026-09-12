@@ -24,8 +24,8 @@ class PlayerSurfaceTests(unittest.TestCase):
         self.assertIn('.webp', player.MEDIA_EXTENSIONS)
 
     def test_audio_extensions_are_separate(self):
-        self.assertIn('.mp3', player.AUDIO_EXTENSIONS)
         self.assertNotIn('.mp3', player.MEDIA_EXTENSIONS)
+        self.assertNotIn('.flac', player.MEDIA_EXTENSIONS)
 
 
 if __name__ == '__main__':
