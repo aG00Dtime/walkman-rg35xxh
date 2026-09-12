@@ -1,0 +1,50 @@
+param(
+  [string]$Output = "walkman-rg35xxh.zip"
+)
+
+$ErrorActionPreference = "Stop"
+$stage = Join-Path ([System.IO.Path]::GetTempPath()) ("walkman-rg35xxh-" + [guid]::NewGuid().ToString('N'))
+$port = Join-Path $stage "walkman"
+New-Item -ItemType Directory -Path (Join-Path $port "music") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $port "video") -Force | Out-Null
+
+$files = @(
+  "Walkman.sh",
+  "player.py",
+  "design.py",
+  "gameinfo.xml",
+  "README.md",
+  "font.ttf",
+  "font-LICENSE.txt",
+  "cover.png"
+)
+foreach ($file in $files) {
+  Copy-Item -LiteralPath (Join-Path "." $file) -Destination (Join-Path $port $file)
+}
+Copy-Item -LiteralPath "music/.gitkeep" -Destination (Join-Path $port "music/.gitkeep")
+Copy-Item -LiteralPath "video/.gitkeep" -Destination (Join-Path $port "video/.gitkeep")
+
+Compress-Archive -Path (Join-Path $stage "walkman") -DestinationPath $Output -Force
+
+$archive = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath $Output))
+try {
+  $entries = @($archive.Entries | ForEach-Object { $_.FullName.Replace('\', '/').TrimEnd('/') })
+} finally {
+  $archive.Dispose()
+}
+$required = @(
+  'walkman/Walkman.sh',
+  'walkman/player.py',
+  'walkman/design.py',
+  'walkman/gameinfo.xml',
+  'walkman/README.md',
+  'walkman/font.ttf',
+  'walkman/font-LICENSE.txt',
+  'walkman/cover.png',
+  'walkman/music/.gitkeep',
+  'walkman/video/.gitkeep'
+)
+foreach ($item in $required) {
+  if ($entries -notcontains $item) { throw "Invalid Walkman package: missing $item" }
+}
+Write-Output "Created $Output"

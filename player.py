@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Walkman 0.4: themes, visualiser, EQ, battery, playlist auto-advance."""
+"""Walkman: local music and media playback for the RG35XX H."""
 import array as _array
 import glob
 import hashlib

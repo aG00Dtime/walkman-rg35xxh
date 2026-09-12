@@ -3,8 +3,8 @@
   <game>
     <path>./Walkman.sh</path>
     <name>Walkman</name>
-    <desc>A cassette-style MP3 player for the RG35XX H.</desc>
-    <genre>Music</genre>
+    <desc>A cassette-style music and media player for the RG35XX H.</desc>
+    <genre>Media</genre>
     <image>./cover.png</image>
   </game>
 </gameList>

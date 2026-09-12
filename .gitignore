@@ -1,0 +1,23 @@
+# Runtime state and generated media data
+state.json
+.cache/
+
+# Local music and media
+music/*
+!music/.gitkeep
+video/*
+!video/.gitkeep
+
+# Python and local tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.claude/
+.venv/
+
+# Local packages and logs
+*.zip
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
