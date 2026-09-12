@@ -46,6 +46,10 @@ _VIZ_STEP  = _VIZ_SR // _VIZ_FPS   # 800 samples between stored frames
 _VIZ_FREQS = [40.0 * (3800.0/40.0)**(i/(_VIZ_N-1)) for i in range(_VIZ_N)]
 # Goertzel coefficient for each target frequency (precomputed once at startup)
 _VIZ_COEFS = [2.0 * math.cos(2.0 * math.pi * f / _VIZ_SR) for f in _VIZ_FREQS]
+SEARCH_LAYERS = (
+    (list('1234567890-='), list('qwertyuiop[]'), list("asdfghjkl;'"), list('zxcvbnm,./') + [' ', '←']),
+    (list('!@#$%^&*()_+'), list('QWERTYUIOP{}'), list('ASDFGHJKL:"|'), list('ZXCVBNM<>?') + [' ', '←']),
+)
 
 
 class MetadataStore:
@@ -167,7 +171,8 @@ class MetadataStore:
 
 
 class App:
-    categories = ['All Songs','Media','Albums','Artists','Folders','Favorites','Recent','Playlists']
+    categories = ['All Songs','Media','Albums','Artists','Favorites','Recent','Playlists','Settings']
+    SEARCH_LAYERS = SEARCH_LAYERS
 
     def __init__(self, preview=False):
         self.preview = preview
@@ -188,6 +193,7 @@ class App:
         self._lock_anim_kind = None
         self._lock_anim_started = 0.0
         self.sel = 0; self.rows = []; self.heading = 'All Songs'; self.stack = []
+        self._search = None
         self.current = None; self.position = 0.; self.duration = 0.; self.media_type = 'audio'
         self._video_return_view = 'home'
         self.paused = False; self.angle = 0.; self.queue = []
@@ -423,14 +429,22 @@ class App:
             except BlockingIOError: continue
             for offset in range(0, len(data) - event_struct.size + 1, event_struct.size):
                 _, _, kind, code, value = event_struct.unpack_from(data, offset)
-                # On the RG35XX-H firmware, the physical R1 button reports
-                # BTN_Z (309). BTN_TR (311) is the physical START button.
+                # Physical R1 reports BTN_Z (309) on this controller.
                 if kind == 1 and code == 309 and value in (0, 1):
-                    self.act('screen_lock_down' if value == 1 else 'screen_lock_up')
+                    if self.view == 'search' and value == 1:
+                        self.act('search')
+                    else:
+                        self.act('screen_lock_down' if value == 1 else 'screen_lock_up')
                     locked_now = True
                 elif kind == 1 and code == 310 and value == 1:
                     self.act('pause_toggle')
                     locked_now = True
+                # Physical L2 reports BTN_SELECT (314) and submits a search.
+                elif kind == 1 and code == 314 and value == 1:
+                    if self.view == 'search': self.act('search')
+                # The RG35XX-H's physical R2 reports BTN_START (315).
+                elif kind == 1 and code == 315 and value == 1:
+                    if self.view != 'search': self.act('search')
         if self.screen_locked and self._r1_down_at and time.monotonic() - self._r1_down_at >= 0.9:
             self._unlock_screen()
             self._r1_down_at = None
@@ -507,6 +521,74 @@ class App:
                 seen[key] = cached if os.path.isfile(cached) else None
             except Exception: seen[key] = None
         self._fetch_status = None
+
+    def _artist_cache_path(self, artist):
+        """Return the one local thumbnail path shared by an artist's albums."""
+        digest = hashlib.md5((artist.casefold() + ':artist:200').encode('utf-8')).hexdigest()
+        return os.path.join(self._covers_dir, 'artist-' + digest + '.png')
+
+    def _fetch_artist_art_worker(self, mode):
+        """Fetch optional artist photos from TheAudioDB and save them locally."""
+        artists = sorted({
+            (self.metadata.get(path, {}).get('artist') or '').strip()
+            for path in self.tracks
+        }, key=str.casefold)
+        artists = [artist for artist in artists if artist]
+        last_request = 0.0
+        completed = 0
+        try:
+            for index, artist in enumerate(artists):
+                if self._fetch_cancel:
+                    break
+                cached = self._artist_cache_path(artist)
+                self._fetch_status = 'Artist photos: ' + artist[:34] + '\n%d of %d' % (index + 1, len(artists))
+                if mode == 'missing' and os.path.isfile(cached):
+                    completed += 1
+                    continue
+                # Free accounts allow 30 requests per minute. Keep under that limit.
+                wait = 2.1 - (time.monotonic() - last_request)
+                if wait > 0:
+                    time.sleep(wait)
+                last_request = time.monotonic()
+                try:
+                    url = 'https://www.theaudiodb.com/api/v1/json/123/search.php?' + urllib.parse.urlencode({'s': artist})
+                    request = urllib.request.Request(url, headers={'User-Agent': 'Walkman/1.0 (rg35xxh)'})
+                    with urllib.request.urlopen(request, timeout=10) as response:
+                        payload = json.loads(response.read().decode('utf-8'))
+                    rows = payload.get('artists') or []
+                    image_url = rows[0].get('strArtistThumb') if rows else None
+                    if not image_url:
+                        completed += 1
+                        continue
+                    image_request = urllib.request.Request(image_url, headers={'User-Agent': 'Walkman/1.0 (rg35xxh)'})
+                    with urllib.request.urlopen(image_request, timeout=12) as response:
+                        image_data = response.read()
+                except Exception:
+                    completed += 1
+                    continue
+                raw = '/tmp/walkman-artist-%d.img' % threading.get_ident()
+                try:
+                    with open(raw, 'wb') as image_file:
+                        image_file.write(image_data)
+                    subprocess.run([
+                        'ffmpeg', '-y', '-v', 'error', '-i', raw,
+                        '-vf', 'scale=200:200:force_original_aspect_ratio=increase,crop=200:200',
+                        cached,
+                    ], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+                    if os.path.isfile(cached):
+                        with self._cover_lock:
+                            self._cover_ready[('Artists', artist)] = cached
+                except (OSError, subprocess.SubprocessError):
+                    pass
+                finally:
+                    try: os.unlink(raw)
+                    except OSError: pass
+                completed += 1
+        finally:
+            result = 'Artist photos canceled' if self._fetch_cancel else 'Artist photos ready'
+            self._fetch_status = result + '\n%d/%d artists checked' % (completed, len(artists))
+            time.sleep(1.5)
+            self._fetch_status = None
 
     def scan(self):
         self.tracks = []; self.media = []; self.playlists = []
@@ -667,7 +749,13 @@ class App:
             key, paths = item
             if key in self.group_covers or key in self._cover_ready: continue
             found = None
+            if isinstance(key, tuple) and key[0] == 'Artists':
+                artist_cached = self._artist_cache_path(key[1])
+                if os.path.isfile(artist_cached):
+                    found = artist_cached
             for path in paths[:5]:
+                if found:
+                    break
                 h = hashlib.md5((path+':48').encode()).hexdigest()
                 cached = os.path.join(self._covers_dir, h+'.png')
                 if not os.path.isfile(cached):
@@ -803,10 +891,97 @@ class App:
                     gkey = (label, name)
                     if gkey not in self.group_covers and gkey not in self._cover_ready and gkey not in queued:
                         self._cover_queue.append((gkey, paths))
-        elif label == 'Folders': self.folder(MUSIC)
         elif label in ('Favorites','Recent'): self.show(label, self.song_rows(self.state[label.lower()]))
         elif label == 'Playlists': self.show(label, [(os.path.basename(p),'playlist',p) for p in self.playlists])
-        else: self.settings()
+        elif label == 'Settings': self.settings()
+
+    def start_search(self):
+        if self.view != 'list' or self.heading not in ('All Songs', 'Media', 'Albums', 'Artists'):
+            return
+        self._search = {
+            'scope': self.heading,
+            'query': '',
+            'layer': 0,
+            'x': 0,
+            'y': 0,
+            'message': '',
+            'return': (self.view, self.heading, self.rows, self.sel),
+        }
+        self.view = 'search'
+
+    def cancel_search(self):
+        if not self._search:
+            self.view = 'home'
+            return
+        self.view, self.heading, self.rows, self.sel = self._search['return']
+        self._search = None
+
+    def search_results(self, scope, query):
+        term = query.casefold()
+        if scope == 'All Songs':
+            paths = [path for path in self.tracks if term in ' '.join((
+                self.track_title(path),
+                self.metadata.get(path, {}).get('artist', ''),
+                self.metadata.get(path, {}).get('album', ''),
+            )).casefold()]
+            return self.song_rows(paths)
+        if scope == 'Media':
+            return self.media_rows([path for path in self.media if term in os.path.basename(path).casefold()])
+        group_key = 'album' if scope == 'Albums' else 'artist'
+        unknown = 'Unknown ' + group_key
+        groups = {}
+        for path in self.tracks:
+            name = self.metadata.get(path, {}).get(group_key) or unknown
+            if term in name.casefold():
+                groups.setdefault(name, []).append(path)
+        return [(name, 'group', paths) for name, paths in sorted(groups.items(), key=lambda item: item[0].casefold())]
+
+    def submit_search(self):
+        if not self._search:
+            return
+        query = self._search['query'].strip()
+        if not query:
+            self._search['message'] = 'Type something to search'
+            return
+        scope = self._search['scope']
+        returned_view, returned_heading, returned_rows, returned_sel = self._search['return']
+        self.view, self.heading, self.rows, self.sel = returned_view, returned_heading, returned_rows, returned_sel
+        self._search = None
+        self.show('Search: ' + query, self.search_results(scope, query))
+
+    def search_action(self, action):
+        page = self._search
+        if not page:
+            return
+        if action == 'b':
+            self.cancel_search()
+            return
+        if action == 'search':
+            self.submit_search()
+            return
+        if action == 'search_shift':
+            page['layer'] = 1 - page['layer']
+            return
+        if action == 'x':
+            page['layer'] = 1 - page['layer']
+            return
+        if action == 'y':
+            page['query'] = page['query'][:-1]
+            return
+        if action == 'a':
+            key = SEARCH_LAYERS[page['layer']][page['y']][page['x']]
+            page['query'] = page['query'][:-1] if key == '←' else page['query'] + key
+            return
+        if action == 'quit':
+            self.submit_search()
+            return
+        if action in ('left', 'right', 'up', 'down'):
+            if action == 'left': page['x'] = (page['x'] - 1) % len(SEARCH_LAYERS[page['layer']][page['y']])
+            elif action == 'right': page['x'] = (page['x'] + 1) % len(SEARCH_LAYERS[page['layer']][page['y']])
+            else:
+                page['y'] = (page['y'] + (-1 if action == 'up' else 1)) % len(SEARCH_LAYERS[page['layer']])
+                page['x'] = min(page['x'], len(SEARCH_LAYERS[page['layer']][page['y']]) - 1)
+            self._play_sound(self._snd_nav)
 
     def settings(self):
         saved_sel = self.sel if self.heading == 'Settings' else 0
@@ -821,10 +996,12 @@ class App:
             ('◇  Accent color...', 'open_picker', None),
             ('Library', 'header', None),
             ('Library database: '+('dbm' if self._metadata_backend == 'dbm' else 'JSON fallback'), 'info', None),
+            ('▣  Browse music folders', 'folders', None),
             ('Storage', 'header', None),
             *self.storage_rows(),
             ('↺  Rescan music', 'rescan', None),
             ('⊡  Fetch cover art...', 'fetch_art_menu', None),
+            ('◉  Fetch artist photos...', 'fetch_artist_art_menu', None),
             ('⊘  Clear metadata cache', 'clear_cache', None),
             ('⊠  Clear cover art cache', 'clear_covers', None),
             ('⊠  Clear visualizer cache', 'clear_viz', None),
@@ -1118,6 +1295,10 @@ class App:
                 if self._r1_down_at is None: self._r1_down_at = time.monotonic()
             else:
                 self._lock_screen(); self._r1_down_at = None
+        elif self.view == 'search':
+            self.search_action(action)
+        elif action == 'search':
+            self.start_search()
         elif action == 'stop_playback':
             self.stop()
             self.current = None; self.queue = []; self.position = 0.; self.duration = 0.; self.paused = True
@@ -1203,6 +1384,8 @@ class App:
                 elif kind == 'rescan':
                     self._scanning = True; self.draw(); pygame.display.flip()
                     self.scan(); self._scanning = False; self.settings()
+                elif kind == 'folders':
+                    self.folder(MUSIC)
                 elif kind == 'fetch_art_menu':
                     self.show('Fetch Cover Art', [
                         ('◈  Missing only', 'fetch_art', 'missing'),
@@ -1212,6 +1395,15 @@ class App:
                     self._fetch_cancel = False
                     self._fetch_status = 'Connecting...'
                     threading.Thread(target=self._fetch_art_worker, args=(value,), daemon=True).start()
+                elif kind == 'fetch_artist_art_menu':
+                    self.show('Fetch Artist Photos', [
+                        ('◈  Missing only', 'fetch_artist_art', 'missing'),
+                        ('◈  Refresh all',  'fetch_artist_art', 'all'),
+                    ])
+                elif kind == 'fetch_artist_art':
+                    self._fetch_cancel = False
+                    self._fetch_status = 'Connecting...'
+                    threading.Thread(target=self._fetch_artist_art_worker, args=(value,), daemon=True).start()
                 elif kind == 'info':
                     pass
                 elif kind == 'build_viz':
@@ -1280,7 +1472,8 @@ class App:
         if getattr(self,'_scanning',False) or self._fetch_status is not None:
             self.design.scanning(self); return
         {'home':self.design.dashboard,'list':self.design.listing,'tape':self.design.cassette,
-         'viz':self.design.viz,'details':self.design.details,'picker':self.design.picker}.get(self.view, self.design.dashboard)(self)
+         'viz':self.design.viz,'details':self.design.details,'picker':self.design.picker,
+         'search':self.design.search}.get(self.view, self.design.dashboard)(self)
         self.design.volume_overlay(self)
 
     def loop(self):

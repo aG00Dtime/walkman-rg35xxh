@@ -14,13 +14,22 @@ These captures were taken directly from an RG35XX H running the current app.
   <img src="./screenshots/walkman-cassette.png" alt="Walkman cassette player screen" width="31%">
 </div>
 
+## Latest changes
+
+- Search **All Songs**, **Media**, **Albums**, and **Artists**: press **R2**
+  to open the keyboard, then **L2** to run the search.
+- Albums and Artists now use larger thumbnails. Artist photos can be fetched
+  from **Settings → Fetch artist photos...** and are kept on the device.
+- The final home card is now **Settings**. Folder browsing lives in
+  **Settings → Browse music folders**.
+
 ## What the app does
 
 ### Music playback
 
 - Plays MP3, FLAC, OGG, WAV, and M4A files through mpv.
-- Browses All Songs, Albums, Artists, Folders, Favorites, Recent, and
-  Playlists (`.m3u` and `.m3u8`).
+- Browses All Songs, Albums, Artists, Favorites, Recent, and Playlists
+  (`.m3u` and `.m3u8`), with folder browsing in Settings.
 - Maintains a queue with shuffle, repeat, previous, next, and automatic advance.
 - Displays embedded or folder artwork and caches it locally.
 - Keeps the now-playing time and progress bar updated from mpv's playback
@@ -49,6 +58,8 @@ the current video and returns to the library view.
 - Album art can be extracted from tags or folder images.
 - Use **Fetch cover art** in Settings to find missing album covers through
   MusicBrainz and the Cover Art Archive.
+- Use **Fetch artist photos** in Settings to add artist thumbnails from
+  TheAudioDB. Once saved, they are shown from Walkman's local cache.
 
 ### Settings and storage
 
@@ -67,7 +78,7 @@ being installed on the handheld.
 - **Media** lists every supported video and picture in the video folder and
   shows its generated thumbnail.
 - **Albums** and **Artists** group music using cached tag information.
-- **Folders** follows the music folder structure.
+- **Browse music folders** in Settings follows the music folder structure.
 - **Favorites** stores tracks you mark for quick access.
 - **Recent** shows recently played tracks.
 - **Playlists** reads local `.m3u` and `.m3u8` files.
@@ -87,7 +98,8 @@ if mpv's local control connection briefly drops.
 - mpv for audio and video playback.
 - ffmpeg for artwork extraction, thumbnails, and visualizer analysis.
 - mutagen is optional; it improves metadata scanning when installed.
-- Network access is optional and is only needed for MusicBrainz cover-art fetch.
+- Network access is optional and is only needed when fetching cover art or
+  artist photos.
 
 ## Installation from a release ZIP
 
@@ -126,7 +138,8 @@ Walkman does not need to be reinstalled when you add files. Use this workflow:
 
 New media thumbnails are generated in the background when the Media list is
 opened. For music artwork, use **Settings → Fetch cover art...** and choose
-**Missing only**. To prepare every visualizer file before playback, choose
+**Missing only**. To add artist pictures, use **Settings → Fetch artist
+photos...**. To prepare every visualizer file before playback, choose
 **Settings → Build visualizer cache**. The current filename and progress bar
 are shown while processing; press **B** to cancel.
 
@@ -190,6 +203,8 @@ updating `gamelist.xml`.
 | **R1** | Lock the screen while audio continues |
 | **Hold R1** | Unlock the screen; release it before starting the unlock hold |
 | **L1** | Pause or resume audio |
+| **R2** | Open search in All Songs, Media, Albums, or Artists |
+| **L2** | Run the current search |
 | **START** | Exit the app |
 | **SELECT** | Exit while keeping audio playing in the background |
 | **Volume buttons** | Change device volume, including while locked |
@@ -263,8 +278,8 @@ run.
 ## Privacy and security
 
 Walkman is a local player. It does not require an account or transmit library
-data. MusicBrainz cover-art fetching is optional and sends only artist/album
-search terms to the public MusicBrainz service. Local state, metadata, artwork,
+data. Optional artwork fetching sends artist/album search terms to MusicBrainz
+and artist names to TheAudioDB. Local state, metadata, artwork,
 visualizer data, logs, and personal media are excluded from Git and release
 packages.
 

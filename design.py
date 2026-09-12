@@ -196,7 +196,8 @@ class Design:
         self.header(app.heading,app)
         settings = app.heading == 'Settings'
         show_art=app.heading in ('Albums','Artists','Media')
-        row_h=56 if show_art else (36 if settings else 40)
+        large_art = app.heading in ('Albums', 'Artists')
+        row_h=78 if large_art else (56 if show_art else (36 if settings else 40))
         visible=(353 if settings else 293)//row_h
         first=max(0,min(app.sel-visible//2,max(0,len(app.rows)-visible)))
         flash_age=time.monotonic()-getattr(app,'_sel_flash_t',0)
@@ -224,7 +225,7 @@ class Design:
                     pygame.draw.circle(self.s,MUTED if not selected else BG,(25+tsz//2,ty+tsz//2),tsz//4,2)
                 if selected:
                     pygame.draw.rect(self.s,col,(24,ty-1,tsz+2,tsz+2),border_radius=5,width=2)
-                self.text(label,84+tsz//2,y+row_h//2-9,18,BG if selected else WHITE,width=596-84-tsz//2-8)
+                self.text(label,43+tsz,y+row_h//2-9,18,BG if selected else WHITE,width=568-tsz)
             else:
                 self.text(label,35,y+(row_h-20)//2,18,BG if selected else WHITE,width=565)
         if not app.rows:
@@ -233,9 +234,43 @@ class Design:
             self.text(empty_label,320,173,24,MUTED,center=True)
             self.text(empty_hint,320,212,15,MUTED,center=True)
         if not settings:
-            self.mini(app); self.hints([('A','Open / Play'),('Y','Settings'),('X','Playing')])
+            self.mini(app)
+            if app.heading in ('All Songs','Media','Albums','Artists'):
+                self.hints([('A','Open / Play'),('R2','Search'),('Y','Settings')])
+            else:
+                self.hints([('A','Open / Play'),('Y','Settings'),('X','Playing')])
         else:
             self.hints([('A','Select'),('B','Back'),('START','Exit')])
+
+    def search(self, app):
+        page = app._search or {}
+        self.header('Search ' + page.get('scope', ''), app)
+        query = page.get('query', '')
+        pygame.draw.rect(self.s, PANEL, (20, 68, 600, 52), border_radius=6)
+        pygame.draw.rect(self.s, AMBER, (20, 68, 600, 52), 2, border_radius=6)
+        self.text(query + ('|' if int(time.monotonic() * 2) % 2 else ''), 34, 84, 20, WHITE if query else MUTED,
+                  width=560)
+        if not query:
+            self.text('Type to search', 34, 84, 20, MUTED)
+        self.text('X  ' + ('ABC' if page.get('layer') else 'abc'), 506, 132, 13, AMBER, center=True)
+        layers = getattr(app, 'SEARCH_LAYERS', None)
+        # The layout is defined in player.py; this fallback keeps previews safe.
+        layers = layers or ((list('1234567890-='), list('qwertyuiop[]'), list("asdfghjkl;'"), list('zxcvbnm,./') + [' ', '←']),)
+        keys = layers[page.get('layer', 0)]
+        for row, values in enumerate(keys):
+            for col, key in enumerate(values):
+                x, y = 20 + col * 50, 151 + row * 56
+                selected = row == page.get('y', 0) and col == page.get('x', 0)
+                pygame.draw.rect(self.s, AMBER if selected else PANEL, (x, y, 46, 50), border_radius=5)
+                if not selected:
+                    pygame.draw.rect(self.s, LINE, (x, y, 46, 50), 1, border_radius=5)
+                label = 'SPACE' if key == ' ' else 'DEL' if key == '←' else key
+                self.text(label, x + 23, y + 25, 13, BG if selected else WHITE, center=True)
+        if page.get('message'):
+            self.text(page['message'], 320, 404, 15, MUTED, center=True)
+        else:
+            self.text('A Type   X Shift   Y Delete   Use SPACE key', 320, 404, 15, MUTED, center=True)
+        self.hints([('L2','Search'),('B','Cancel'),('START','Exit')])
 
     def viz(self,app):
         self.s.fill(BG)
