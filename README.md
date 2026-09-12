@@ -8,9 +8,11 @@ interface designed for the handheld's 640×480 screen.
 
 These captures were taken directly from an RG35XX H running the current port.
 
-| Library | Viz / Now Playing | Cassette player |
-|---|---|---|
-| ![Walkman library screen](https://github.com/aG00Dtime/walkman-rg35xxh/raw/refs/heads/master/docs/screenshots/walkman-library.png) | ![Walkman visualizer and now-playing screen](https://github.com/aG00Dtime/walkman-rg35xxh/raw/refs/heads/master/docs/screenshots/walkman-now-playing.png) | ![Walkman cassette player screen](https://github.com/aG00Dtime/walkman-rg35xxh/raw/refs/heads/master/docs/screenshots/walkman-cassette.png) |
+<div align="center">
+  <img src="./screenshots/walkman-library.png" alt="Walkman library screen" width="31%">
+  <img src="./screenshots/walkman-now-playing.png" alt="Walkman visualizer and now-playing screen" width="31%">
+  <img src="./screenshots/walkman-cassette.png" alt="Walkman cassette player screen" width="31%">
+</div>
 
 ## What the app does
 
