@@ -10,7 +10,7 @@ These captures were taken directly from an RG35XX H running the current port.
 
 | Library | Viz / Now Playing | Cassette player |
 |---|---|---|
-| ![Walkman library screen](https://raw.githubusercontent.com/aG00Dtime/walkman-rg35xxh/master/docs/screenshots/walkman-library.png) | ![Walkman visualizer and now-playing screen](https://raw.githubusercontent.com/aG00Dtime/walkman-rg35xxh/master/docs/screenshots/walkman-now-playing.png) | ![Walkman cassette player screen](https://raw.githubusercontent.com/aG00Dtime/walkman-rg35xxh/master/docs/screenshots/walkman-cassette.png) |
+| ![Walkman library screen](https://github.com/aG00Dtime/walkman-rg35xxh/raw/refs/heads/master/docs/screenshots/walkman-library.png) | ![Walkman visualizer and now-playing screen](https://github.com/aG00Dtime/walkman-rg35xxh/raw/refs/heads/master/docs/screenshots/walkman-now-playing.png) | ![Walkman cassette player screen](https://github.com/aG00Dtime/walkman-rg35xxh/raw/refs/heads/master/docs/screenshots/walkman-cassette.png) |
 
 ## What the app does
 
