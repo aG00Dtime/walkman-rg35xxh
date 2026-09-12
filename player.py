@@ -502,8 +502,11 @@ class App:
                     else:
                         self.act('screen_lock_down' if value == 1 else 'screen_lock_up')
                     locked_now = True
+                # The physical SELECT button reports BTN_TL2 (310).  Catch
+                # it at the raw input layer so it cannot be mistaken for the
+                # generic Pygame exit button mapping.
                 elif kind == 1 and code == 310 and value == 1:
-                    self.act('pause_toggle')
+                    self.act('background')
                     locked_now = True
                 # Physical L2 reports BTN_SELECT (314) and submits a search.
                 elif kind == 1 and code == 314 and value == 1:
@@ -1583,7 +1586,10 @@ class App:
                     elif e.type == pygame.JOYHATMOTION:
                         x, y = e.value; action = 'left' if x<0 else 'right' if x>0 else 'up' if y>0 else 'down' if y<0 else None
                     elif e.type == pygame.JOYBUTTONDOWN:
-                        action = {3:'a',4:'b',6:'x',5:'y',7:'pause_toggle',9:'background',10:'quit',11:'quit'}.get(e.button)
+                        # SELECT is button 10 on the RG35XX H.  It exits the
+                        # UI but deliberately leaves mpv running for music.
+                        # START (11) remains the normal full app exit.
+                        action = {3:'a',4:'b',6:'x',5:'y',7:'pause_toggle',9:'background',10:'background',11:'quit'}.get(e.button)
                     elif e.type == pygame.JOYBUTTONUP:
                         action = None
                     elif e.type == pygame.KEYDOWN:
