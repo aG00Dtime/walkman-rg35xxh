@@ -1,12 +1,12 @@
 # Walkman RG35XX H
 
-Walkman is a local music and media player for the Anbernic RG35XX H running
-KNULLI Linux. It is packaged as a PortMaster port and uses a controller-first
-interface designed for the handheld's 640×480 screen.
+Walkman is a local music and media app for the Anbernic RG35XX H running
+KNULLI Linux. It uses a controller-first interface designed for the handheld's
+640×480 screen and launches from KNULLI's Ports menu through PortMaster.
 
 ## Screenshots
 
-These captures were taken directly from an RG35XX H running the current port.
+These captures were taken directly from an RG35XX H running the current app.
 
 <div align="center">
   <img src="./screenshots/walkman-library.png" alt="Walkman library screen" width="31%">
@@ -57,7 +57,7 @@ tools, visualizer processing, independent cache controls, and storage totals
 for the music library, media library, cache, and all Walkman data.
 
 Walkman intentionally uses JSON files rather than SQLite or another database.
-This keeps the port self-contained and avoids relying on additional libraries
+This keeps the app self-contained and avoids relying on additional libraries
 being installed on the handheld.
 
 ### Library sections
@@ -88,7 +88,7 @@ if mpv's local control connection briefly drops.
 - mutagen is optional; it improves metadata scanning when installed.
 - Network access is optional and is only needed for MusicBrainz cover-art fetch.
 
-The port does not require SQLite, a Python package download, a server, or a
+The app does not require SQLite, a Python package download, a server, or a
 computer connection after installation.
 
 ## Installation from a release ZIP
@@ -147,13 +147,14 @@ open the affected library again.
 5. Add music to `music/` and other media to `video/`.
 6. Launch `Walkman.sh` from the KNULLI Ports menu.
 
-The included `gameinfo.xml` provides the PortMaster/KNULLI display metadata.
+The included `gameinfo.xml` provides display metadata for the PortMaster/KNULLI
+launcher.
 `Walkman.sh` creates the launcher thumbnail entry when an existing Walkman
 game-list entry is present.
 
 ## Add Walkman to the KNULLI game list
 
-If KNULLI does not add the port automatically, edit the SD card's
+If KNULLI does not add the app automatically, edit the SD card's
 `roms/ports/gamelist.xml` and add this entry inside `<gameList>`:
 
 ```xml
@@ -274,7 +275,7 @@ packages.
 Walkman is distributed under the [MIT License](LICENSE). The bundled DejaVu
 Sans font is distributed under its own license in
 [`font-LICENSE.txt`](font-LICENSE.txt); retain that file when redistributing
-the port.
+the app.
 
 Walkman is an independent community project and is not affiliated with
 Anbernic, KNULLI, PortMaster, or mpv.

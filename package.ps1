@@ -4,9 +4,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 $stage = Join-Path ([System.IO.Path]::GetTempPath()) ("walkman-rg35xxh-" + [guid]::NewGuid().ToString('N'))
-$port = Join-Path $stage "walkman"
-New-Item -ItemType Directory -Path (Join-Path $port "music") -Force | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $port "video") -Force | Out-Null
+$appFolder = Join-Path $stage "walkman"
+New-Item -ItemType Directory -Path (Join-Path $appFolder "music") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $appFolder "video") -Force | Out-Null
 
 $files = @(
   "Walkman.sh",
@@ -19,10 +19,10 @@ $files = @(
   "cover.png"
 )
 foreach ($file in $files) {
-  Copy-Item -LiteralPath (Join-Path "." $file) -Destination (Join-Path $port $file)
+  Copy-Item -LiteralPath (Join-Path "." $file) -Destination (Join-Path $appFolder $file)
 }
-Copy-Item -LiteralPath "music/.gitkeep" -Destination (Join-Path $port "music/.gitkeep")
-Copy-Item -LiteralPath "video/.gitkeep" -Destination (Join-Path $port "video/.gitkeep")
+Copy-Item -LiteralPath "music/.gitkeep" -Destination (Join-Path $appFolder "music/.gitkeep")
+Copy-Item -LiteralPath "video/.gitkeep" -Destination (Join-Path $appFolder "video/.gitkeep")
 
 Compress-Archive -Path (Join-Path $stage "walkman") -DestinationPath $Output -Force
 
