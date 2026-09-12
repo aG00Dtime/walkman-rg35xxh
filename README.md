@@ -54,6 +54,9 @@ the current video and returns to the library view.
 ### Visualizer and artwork processing
 
 - Four visualizer styles: Bars, Mirror, Wave, and Radial.
+- Optional Dynamic visualizer color samples a stable, brighter palette from
+  the current album art and blends it from the low bars to the high bars.
+  Mostly grayscale artwork falls back to the active theme color.
 - Visualizer analysis runs in the background so the interface stays usable.
 - Settings can process the complete music library and show the current file,
   item count, and progress bar.

@@ -105,6 +105,18 @@ class Design:
     def line(self, a, b, color=None, w=1):
         pygame.draw.line(self.s, LINE if color is None else color, a, b, w)
 
+    @staticmethod
+    def _palette_color(palette, index, total):
+        if not palette:
+            return AMBER
+        if len(palette) == 1 or total <= 1:
+            return palette[0]
+        point = index * (len(palette) - 1) / (total - 1)
+        low = min(len(palette) - 2, int(point))
+        mix = point - low
+        first, second = palette[low], palette[low + 1]
+        return tuple(int(first[i] + (second[i] - first[i]) * mix) for i in range(3))
+
     def icon(self, kind, x, y, color=None):
         if color is None: color = WHITE
         s = self.s
@@ -188,7 +200,7 @@ class Design:
     def volume_overlay(self,app):
         vol=getattr(app,'_volume',None)
         if vol is None or time.monotonic()>=getattr(app,'_volume_shown_until',0): return
-        pw,ph=230,34; px=(640-pw)//2; py=10
+        pw,ph=184,34; px=(640-pw)//2; py=10
         pygame.draw.rect(self.s,(28,26,20),(px,py,pw,ph),border_radius=9)
         pygame.draw.rect(self.s,LINE,(px,py,pw,ph),1,border_radius=9)
         ix,iy=px+16,py+17
@@ -198,7 +210,6 @@ class Design:
         bx,by,bw,bh=px+38,py+14,130,6
         pygame.draw.rect(self.s,LINE,(bx,by,bw,bh),border_radius=3)
         if vol>0: pygame.draw.rect(self.s,AMBER,(bx,by,int(bw*vol/100),bh),border_radius=3)
-        self.text('%d%%'%vol,px+182,py+17,15,WHITE,center=True)
 
     def dashboard(self,app):
         self.header(app=app)
@@ -299,7 +310,9 @@ class Design:
         self.s.fill(BG)
         bars=getattr(app,'_viz_bars',[0.0]*26)
         N=len(bars)
-        r,g,b=AMBER; dark=(max(0,r-80),max(0,g-80),max(0,b-80))
+        palette = app.viz_palette()
+        accent = palette[0] if palette else AMBER
+        r,g,b=accent; dark=(r*62//100,g*62//100,b*62//100)
         by0,bth=8,312; cy=by0+bth//2  # center y=164
 
         style=app.state.get('viz_style','Bars') if hasattr(app,'state') else 'Bars'
@@ -311,12 +324,14 @@ class Design:
                 if bh<2: continue
                 x0=int(i*640/N); x1=int((i+1)*640/N); bw=max(2,x1-x0-2)
                 tip=min(bh,8)
+                color = self._palette_color(palette, i, N)
+                shade = tuple(channel * 62 // 100 for channel in color)
                 # upper bar: tip at top, dark near center
-                if bh>8: pygame.draw.rect(self.s,dark,(x0,cy-bh,bw,bh-tip))
-                pygame.draw.rect(self.s,AMBER,(x0,cy-tip,bw,tip))
+                if bh>8: pygame.draw.rect(self.s,shade,(x0,cy-bh,bw,bh-tip))
+                pygame.draw.rect(self.s,color,(x0,cy-tip,bw,tip))
                 # lower bar: dark near center, tip at bottom
-                pygame.draw.rect(self.s,AMBER,(x0,cy,bw,tip))
-                if bh>8: pygame.draw.rect(self.s,dark,(x0,cy+tip,bw,bh-tip))
+                pygame.draw.rect(self.s,color,(x0,cy,bw,tip))
+                if bh>8: pygame.draw.rect(self.s,shade,(x0,cy+tip,bw,bh-tip))
 
         elif style=='Wave':
             pts_up=[]; pts_dn=[]
@@ -325,8 +340,8 @@ class Design:
                 pts_up.append((x,cy-amp)); pts_dn.append((x,cy+amp))
             if len(pts_up)>=2:
                 pygame.draw.polygon(self.s,dark,pts_up+list(reversed(pts_dn)))
-                pygame.draw.lines(self.s,AMBER,False,pts_up,2)
-                pygame.draw.lines(self.s,AMBER,False,pts_dn,2)
+                pygame.draw.lines(self.s,accent,False,pts_up,2)
+                pygame.draw.lines(self.s,accent,False,pts_dn,2)
 
         elif style=='Radial':
             inner_r=40; outer_max=148
@@ -340,8 +355,10 @@ class Design:
                 x2o=int(320+ca*outer_r); y2o=int(cy+sa*outer_r)
                 tip_r=outer_r-min(outer_r-inner_r,12)
                 x1t=int(320+ca*tip_r); y1t=int(cy+sa*tip_r)
-                pygame.draw.line(self.s,dark,(x1i,y1i),(x1t,y1t),3)
-                pygame.draw.line(self.s,AMBER,(x1t,y1t),(x2o,y2o),3)
+                color = self._palette_color(palette, i, N)
+                shade = tuple(channel * 62 // 100 for channel in color)
+                pygame.draw.line(self.s,shade,(x1i,y1i),(x1t,y1t),3)
+                pygame.draw.line(self.s,color,(x1t,y1t),(x2o,y2o),3)
 
         else:  # Bars
             for i,h in enumerate(bars):
@@ -349,8 +366,10 @@ class Design:
                 if bh<2: continue
                 x0=int(i*640/N); x1=int((i+1)*640/N)
                 bw=max(2,x1-x0-2); by=by0+bth-bh
-                pygame.draw.rect(self.s,AMBER,(x0,by,bw,min(bh,8)))
-                if bh>8: pygame.draw.rect(self.s,dark,(x0,by+8,bw,bh-8))
+                color = self._palette_color(palette, i, N)
+                shade = tuple(channel * 62 // 100 for channel in color)
+                pygame.draw.rect(self.s,color,(x0,by,bw,min(bh,8)))
+                if bh>8: pygame.draw.rect(self.s,shade,(x0,by+8,bw,bh-8))
 
         pos,dur=app.position,app.duration
         pygame.draw.rect(self.s,LINE,(78,340,484,5),border_radius=2)

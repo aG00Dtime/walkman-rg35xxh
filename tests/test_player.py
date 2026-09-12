@@ -45,6 +45,14 @@ class PlayerSurfaceTests(unittest.TestCase):
             ['two', 'three', 'one'],
         )
 
+    def test_album_art_can_supply_a_visualizer_color(self):
+        art = player.pygame.Surface((4, 4))
+        art.fill((35, 130, 220))
+        color = player.App.sample_viz_color(art)
+        self.assertGreater(color[2], color[1])
+        self.assertGreater(color[2], color[0])
+        self.assertEqual(color, (35, 130, 220))
+
     def test_search_matches_song_metadata_media_albums_and_artists(self):
         class SearchData:
             tracks = ['/music/one.mp3', '/music/two.mp3']

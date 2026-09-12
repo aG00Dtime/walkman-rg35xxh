@@ -270,9 +270,10 @@ class App:
         self.state.setdefault('favorites', [])
         self.state.setdefault('recent', [])
         self.state.setdefault('sounds', True)
+        self.state.setdefault('dynamic_viz', False)
         self._picker_hue = float(self.state.get('custom_hue', 30))
         self._apply_theme()
-        self.metadata = {}; self.cover = None
+        self.metadata = {}; self.cover = None; self._viz_color_cover_key = None; self._viz_palette = ()
         self.group_covers = {}; self._cover_ready = {}; self._cover_queue = []; self._cover_lock = threading.Lock()
         self._video_thumbs = {}
         self._cover_thread = threading.Thread(target=self._cover_worker, daemon=True); self._cover_thread.start()
@@ -312,6 +313,71 @@ class App:
             self.design.set_theme(name, accent=Design._hsv_to_rgb(self._picker_hue, 0.72, 0.90))
         else:
             self.design.set_theme(name)
+
+    @staticmethod
+    def sample_viz_palette(surface):
+        """Collect a small, stable palette from album art for the visualizer."""
+        if surface is None:
+            return ()
+        try:
+            sample = pygame.transform.smoothscale(surface, (20, 20))
+            buckets = {}
+            for y in range(20):
+                for x in range(20):
+                    red, green, blue = sample.get_at((x, y))[:3]
+                    high, low = max(red, green, blue), min(red, green, blue)
+                    # Monochrome cover art should use the normal theme accent,
+                    # not produce a nearly gray dynamic visualizer.
+                    if high < 28 or high > 248 or high - low < 30:
+                        continue
+                    key = (red // 32, green // 32, blue // 32)
+                    score = 1 + (high - low) / 255
+                    weight, count, sr, sg, sb = buckets.get(key, (0.0, 0, 0, 0, 0))
+                    buckets[key] = (weight + score, count + 1, sr + red, sg + green, sb + blue)
+            if not buckets:
+                return ()
+            choices = []
+            for weight, count, sr, sg, sb in sorted(buckets.values(), key=lambda row: row[0], reverse=True):
+                color = (sr // count, sg // count, sb // count)
+                if all(sum((color[i] - other[i]) ** 2 for i in range(3)) >= 52 ** 2 for other in choices):
+                    choices.append(color)
+                if len(choices) == 3:
+                    break
+            # Brighten without changing the hue.  Album art is often mastered
+            # quite dark, which made the visualizer look muddy even when the
+            # sampled colour itself was correct.
+            def brighten(color):
+                peak = max(color)
+                if not peak:
+                    return color
+                scale = max(1.0, min(1.55, 215 / peak))
+                return tuple(min(255, int(channel * scale)) for channel in color)
+
+            choices = [brighten(color) for color in choices]
+            if len(choices) == 1:
+                red, green, blue = choices[0]
+                return (
+                    (red * 65 // 100, green * 65 // 100, blue * 65 // 100),
+                    choices[0],
+                    (min(255, red * 150 // 100), min(255, green * 150 // 100), min(255, blue * 150 // 100)),
+                )
+            return tuple(choices)
+        except pygame.error:
+            return ()
+
+    @staticmethod
+    def sample_viz_color(surface):
+        palette = App.sample_viz_palette(surface)
+        return palette[len(palette)//2] if palette else None
+
+    def viz_palette(self):
+        if not self.state.get('dynamic_viz') or self.cover is None:
+            return ()
+        key = (self.current, id(self.cover))
+        if key != self._viz_color_cover_key:
+            self._viz_color_cover_key = key
+            self._viz_palette = self.sample_viz_palette(self.cover)
+        return self._viz_palette
 
     def _update_viz(self, dt):
         self._viz_t += dt
@@ -1020,6 +1086,7 @@ class App:
             ('Appearance', 'header', None),
             ('◑  Theme: '+self.state.get('theme','Cassette'), 'theme', None),
             ('◇  Accent color...', 'open_picker', None),
+            ('◈  Dynamic visualizer: '+('On' if self.state.get('dynamic_viz') else 'Off'), 'dynamic_viz', None),
             ('Library', 'header', None),
             ('Library database: '+('dbm' if self._metadata_backend == 'dbm' else 'JSON fallback'), 'info', None),
             ('▣  Browse music folders', 'folders', None),
