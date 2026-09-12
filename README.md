@@ -47,7 +47,8 @@ the current video and returns to the library view.
 - Settings can process the complete music library and show the current file,
   item count, and progress bar.
 - Album art can be extracted from tags or folder images.
-- Optional MusicBrainz and Cover Art Archive fetching can find missing art.
+- Use **Fetch cover art** in Settings to find missing album covers through
+  MusicBrainz and the Cover Art Archive.
 
 ### Settings and storage
 
