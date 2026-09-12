@@ -24,9 +24,23 @@ foreach ($file in $files) {
 Copy-Item -LiteralPath "music/.gitkeep" -Destination (Join-Path $appFolder "music/.gitkeep")
 Copy-Item -LiteralPath "video/.gitkeep" -Destination (Join-Path $appFolder "video/.gitkeep")
 
-Compress-Archive -Path (Join-Path $stage "walkman") -DestinationPath $Output -Force
+$outputPath = [System.IO.Path]::GetFullPath($Output)
+if (Test-Path -LiteralPath $outputPath) {
+  Remove-Item -LiteralPath $outputPath -Force
+}
 
-$archive = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath $Output))
+# Compress-Archive drops dot-files on Linux, which removes the .gitkeep files
+# that preserve the empty media folders in a release ZIP. ZipFile includes them
+# consistently on Windows and GitHub's Ubuntu runner.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::CreateFromDirectory(
+  $stage,
+  $outputPath,
+  [System.IO.Compression.CompressionLevel]::Optimal,
+  $false
+)
+
+$archive = [System.IO.Compression.ZipFile]::OpenRead($outputPath)
 try {
   $entries = @($archive.Entries | ForEach-Object { $_.FullName.Replace('\', '/').TrimEnd('/') })
 } finally {
