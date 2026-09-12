@@ -88,9 +88,6 @@ if mpv's local control connection briefly drops.
 - mutagen is optional; it improves metadata scanning when installed.
 - Network access is optional and is only needed for MusicBrainz cover-art fetch.
 
-The app does not require SQLite, a Python package download, a server, or a
-computer connection after installation.
-
 ## Installation from a release ZIP
 
 1. Download `walkman-rg35xxh.zip` from the repository's Releases page.
