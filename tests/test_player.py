@@ -31,6 +31,20 @@ class PlayerSurfaceTests(unittest.TestCase):
         self.assertNotIn('.mp3', player.MEDIA_EXTENSIONS)
         self.assertNotIn('.flac', player.MEDIA_EXTENSIONS)
 
+    def test_queue_position_label(self):
+        class QueueData:
+            current = 'second'
+            queue = ['first', 'second', 'third']
+            queue_index = 0
+
+        self.assertEqual(player.App.queue_position_label(QueueData()), '1 / 3')
+
+    def test_queue_starts_at_the_selected_track(self):
+        self.assertEqual(
+            player.App.queue_from_selection(['one', 'two', 'three'], 'two'),
+            ['two', 'three', 'one'],
+        )
+
     def test_search_matches_song_metadata_media_albums_and_artists(self):
         class SearchData:
             tracks = ['/music/one.mp3', '/music/two.mp3']

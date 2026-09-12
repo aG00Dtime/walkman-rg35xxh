@@ -196,7 +196,7 @@ class App:
         self._search = None
         self.current = None; self.position = 0.; self.duration = 0.; self.media_type = 'audio'
         self._video_return_view = 'home'
-        self.paused = False; self.angle = 0.; self.queue = []
+        self.paused = False; self.angle = 0.; self.queue = []; self.queue_index = 0
         self.proc = None; self.sock = None; self.buffer = b''; self.pending = b''; self.loaded = False
         self.socket_path = '/tmp/walkman-mpv.sock'
         self._owns_mpv = False; self._exit_keep_mpv = False; self.current_info = {}
@@ -721,7 +721,10 @@ class App:
         # If playlist advanced while backgrounded, update current track
         ppos = results.get(4)
         if isinstance(ppos,int) and 0 <= ppos < len(self.queue) and os.path.isfile(self.queue[ppos]):
+            self.queue_index = ppos
             self.current = self.queue[ppos]
+        else:
+            self.queue_index = self.queue.index(self.current) if self.current in self.queue else 0
         pos = results.get(1); dur = results.get(2)
         self.position = float(pos) if isinstance(pos,(int,float)) and math.isfinite(pos) else 0.0
         self.duration = float(dur) if isinstance(dur,(int,float)) and math.isfinite(dur) else 0.0
@@ -801,6 +804,15 @@ class App:
     @staticmethod
     def time_label(seconds): return '%02d:%02d'%(int(seconds)//60, int(seconds)%60)
 
+    def queue_position_label(self):
+        if not self.current or not self.queue:
+            return ''
+        index = getattr(self, 'queue_index', None)
+        if not isinstance(index, int) or not 0 <= index < len(self.queue):
+            try: index = self.queue.index(self.current)
+            except ValueError: index = 0
+        return '%d / %d' % (index + 1, len(self.queue))
+
     def save(self):
         tmp = self._state_path + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as _f: json.dump(self.state, _f)
@@ -870,6 +882,20 @@ class App:
 
     def song_rows(self, paths): return [(self.track_title(p),'track',p) for p in paths if os.path.isfile(p)]
     def media_rows(self, paths): return [(os.path.splitext(os.path.basename(p))[0], 'media', p) for p in paths if os.path.isfile(p)]
+
+    @staticmethod
+    def queue_from_selection(paths, selected, shuffle=False):
+        """Start a fresh queue at the selected item, keeping its full list."""
+        paths = list(paths)
+        try:
+            index = paths.index(selected)
+        except ValueError:
+            return paths
+        if shuffle:
+            remaining = paths[:index] + paths[index + 1:]
+            random.shuffle(remaining)
+            return [selected] + remaining
+        return paths[index:] + paths[:index]
 
     def category(self, label):
         if label == 'All Songs': self.show(label, self.song_rows(self.tracks))
@@ -1100,13 +1126,13 @@ class App:
         self.media_type = 'video' if os.path.splitext(path)[1].lower() in MEDIA_EXTENSIONS else 'audio'
         if self.media_type == 'video': self._video_return_view = self.view
         self.stop()
+        start = self.queue.index(path) if path in self.queue else 0
         try:
             if os.path.exists(self.socket_path): os.unlink(self.socket_path)
         except OSError: pass
         m3u = '/tmp/walkman-queue.m3u'
         try:
             with open(m3u,'w',encoding='utf-8') as f: f.write('\n'.join(self.queue)+'\n')
-            start = self.queue.index(path) if path in self.queue else 0
             extra = ['--loop-playlist=inf'] if self.state.get('repeat') else []
             flags = ['--fullscreen','--osd-level=1'] if self.media_type == 'video' else ['--no-video','--audio-display=no']
             if self.media_type == 'video':
@@ -1130,7 +1156,7 @@ class App:
                    '--input-terminal=no','--really-quiet','--input-ipc-server='+self.socket_path,'--',path]
         self.proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         self._owns_mpv = True
-        self.current = path; self.position = 0.; self.duration = 0.; self.paused = False
+        self.current = path; self.queue_index = start; self.position = 0.; self.duration = 0.; self.paused = False
         self.loaded = False; self.pending = b''; self.buffer = b''; self.deadline = time.monotonic()+8; self.view = self.state.get('default_view','tape')
         if self.media_type == 'audio':
             self._load_cover_for(path)
@@ -1261,6 +1287,7 @@ class App:
                         elif key == 'playlist-playing-pos' and isinstance(value, (int, float)):
                             idx = int(value)
                             if not (0 <= idx < len(self.queue)): continue
+                            self.queue_index = idx
                             new_path = self.queue[idx]
                             if new_path != self.current:
                                 self.current = new_path
@@ -1301,7 +1328,7 @@ class App:
             self.start_search()
         elif action == 'stop_playback':
             self.stop()
-            self.current = None; self.queue = []; self.position = 0.; self.duration = 0.; self.paused = True
+            self.current = None; self.queue = []; self.queue_index = 0; self.position = 0.; self.duration = 0.; self.paused = True
             self.state['current'] = None; self.state['queue'] = []; self.save()
             self.view = 'home'
         elif action == 'pause_toggle':
@@ -1372,8 +1399,8 @@ class App:
             elif self.rows:
                 label, kind, value = self.rows[self.sel]
                 if kind in ('track', 'media'):
-                    self.queue = [p for _,k,p in self.rows if k == kind]
-                    if self.state.get('shuffle'): random.shuffle(self.queue)
+                    items = [p for _,k,p in self.rows if k == kind]
+                    self.queue = self.queue_from_selection(items, value, self.state.get('shuffle'))
                     self.play(value)
                 elif kind == 'group': self.show(label, self.song_rows(value))
                 elif kind == 'folder': self.folder(value)
@@ -1507,6 +1534,10 @@ class App:
 
 if __name__ == '__main__':
     logging.basicConfig(filename=os.path.join(ROOT,'log.txt'),level=logging.INFO,format='%(asctime)s %(message)s')
-    app = App()
-    signal.signal(signal.SIGTERM, lambda *_: setattr(app,'running',False))
-    app.loop()
+    try:
+        app = App()
+        signal.signal(signal.SIGTERM, lambda *_: setattr(app,'running',False))
+        app.loop()
+    except Exception:
+        LOG.exception('Walkman stopped because of an unhandled error')
+        raise

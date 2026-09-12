@@ -75,13 +75,32 @@ class Design:
 
     def text(self, value, x, y, size=18, color=None, width=None, center=False):
         if color is None: color = WHITE
-        font = self.fonts[size]
+        # Keep a decorative label from taking down the player if it asks for a
+        # size outside the small set preloaded for this handheld.
+        font = self.fonts.get(size, self.fonts[13])
         value = str(value)
         if width:
             while value and font.size(value)[0] > width:
                 value = value[:-2] + '…' if not value.endswith('…') else value[:-2] + '…'
         im = font.render(value, True, color)
         self.s.blit(im, im.get_rect(center=(x,y)) if center else (x,y))
+
+    def marquee(self, value, x, y, size, color, width, center=False):
+        """Draw a single-line label that gently scrolls only when it is long."""
+        font = self.fonts.get(size, self.fonts[13])
+        value = str(value)
+        image = font.render(value, True, color)
+        if image.get_width() <= width:
+            self.s.blit(image, (x + (width-image.get_width())//2 if center else x, y))
+            return
+        gap = 48
+        period = image.get_width() + gap
+        offset = int(time.monotonic() * 30) % period
+        old_clip = self.s.get_clip()
+        self.s.set_clip(pygame.Rect(x, y, width, image.get_height()))
+        self.s.blit(image, (x - offset, y))
+        self.s.blit(image, (x - offset + period, y))
+        self.s.set_clip(old_clip)
 
     def line(self, a, b, color=None, w=1):
         pygame.draw.line(self.s, LINE if color is None else color, a, b, w)
@@ -159,8 +178,8 @@ class Design:
         pygame.draw.rect(self.s,PANEL,(25,373,59,51),border_radius=3)
         if getattr(app,'cover',None): self.s.blit(pygame.transform.smoothscale(app.cover,(59,51)),(25,373))
         elif app.current: self.icon('Albums',54,399,AMBER)
-        self.text(app.track_title(),103,377,20,width=300)
-        self.text(app.artist(),103,405,15,MUTED,width=300)
+        self.marquee(app.track_title(),103,377,20,WHITE,270)
+        self.marquee(app.artist(),103,405,15,MUTED,270)
         self.transport(529,399,app.paused or not app.current)
         for x,flip in ((462,-1),(594,1)):
             pygame.draw.polygon(self.s,WHITE,[(x+flip*8,399),(x-flip*6,389),(x-flip*6,409)])
@@ -193,7 +212,11 @@ class Design:
         self.mini(app); self.hints([('A','Open'),('Y','Settings'),('X','Playing')])
 
     def listing(self,app):
-        self.header(app.heading,app)
+        count_exclusions = ('Settings', 'Fetch Cover Art', 'Fetch Artist Photos')
+        title = app.heading
+        if app.heading not in count_exclusions:
+            title += ' (%d)' % len(app.rows)
+        self.header(title,app)
         settings = app.heading == 'Settings'
         show_art=app.heading in ('Albums','Artists','Media')
         large_art = app.heading in ('Albums', 'Artists')
@@ -334,6 +357,7 @@ class Design:
         if dur>0: pygame.draw.rect(self.s,AMBER,(78,340,int(484*min(1,pos/dur)),5),border_radius=2)
         self.text(app.time_label(pos),38,343,13,center=True)
         self.text(app.time_label(dur) if dur else '--:--',602,343,13,center=True)
+        if app.queue_position_label(): self.text(app.queue_position_label(),320,352,13,MUTED,center=True)
         self.mini(app)
         self.hints([('A','Pause' if not app.paused else 'Play'),('U/D',style),('START','Exit')])
 
@@ -386,8 +410,8 @@ class Design:
 
     def cassette(self,app):
         self.s.fill(BG); self.s.blit(self.shell,(20,20))
-        self.text(app.track_title(),320,70,28,(24,24,22),width=480,center=True)
-        self.text(app.artist(),320,99,18,(49,45,38),width=460,center=True)
+        self.marquee(app.track_title(),120,55,28,(24,24,22),400,center=True)
+        self.marquee(app.artist(),120,90,18,(49,45,38),400,center=True)
         self.text('A',65,131,32,(23,23,21)); self.text('C60',513,229,28,(38,32,25))
         for x in (184,456):
             pygame.draw.circle(self.s,MUTED,(x,174),48,2)
@@ -406,16 +430,22 @@ class Design:
         pygame.draw.rect(self.s,LINE,(85,386,470,5),border_radius=2)
         if dur>0: pygame.draw.rect(self.s,AMBER,(85,386,int(470*min(1,pos/dur)),5),border_radius=2)
         self.text(app.time_label(dur) if dur else '--:--',595,386,15,center=True)
-        self.text('L1 / ◀  Previous',25,408,13,MUTED)
+        if app.queue_position_label(): self.text(app.queue_position_label(),320,399,13,MUTED,center=True)
+        self.text('◀  Previous',25,408,13,MUTED)
         self.text('P A U S E D' if app.paused else 'P L A Y I N G',320,418,13,AMBER,center=True)
-        self.text('Next  ▶ / R1',511,408,13,MUTED)
+        self.text('Next  ▶',536,408,13,MUTED)
         self.hints([('A','Pause' if not app.paused else 'Play'),('X','Details'),('SELECT','BG')])
 
     def details(self,app):
         self.header('TRACK DETAILS',app)
-        self.text(app.track_title(),25,82,24,width=590)
-        self.text(app.artist(),25,120,20,MUTED,width=590)
-        self.text(app.album(),25,153,18,MUTED,width=590)
+        self.marquee(app.track_title(),25,70,24,WHITE,590)
+        self.marquee(app.artist(),25,105,20,MUTED,500)
+        self.marquee(app.album(),25,135,18,MUTED,590)
+        pos,dur=app.position,app.duration
+        pygame.draw.rect(self.s,LINE,(25,166,590,5),border_radius=2)
+        if dur>0: pygame.draw.rect(self.s,AMBER,(25,166,int(590*min(1,pos/dur)),5),border_radius=2)
+        self.text(app.time_label(pos),25,178,13,MUTED)
+        self.text(app.time_label(dur) if dur else '--:--',615,178,13,MUTED,center=True)
         info=app.current_info; parts=[]
         ext=os.path.splitext(app.current or '')[1].upper().lstrip('.')
         codec=info.get('codec') or ext
@@ -424,10 +454,10 @@ class Design:
         if br: parts.append('%d kbps'%br)
         sr=info.get('sample_rate',0)
         if sr: parts.append('%g kHz'%(sr/1000))
-        self.text('  ·  '.join(parts) if parts else '',25,183,15,AMBER,width=590)
-        self.text(os.path.basename(app.current or ''),25,210,13,MUTED,width=590)
-        self.text('L1 / R1  Previous / Next',25,252,18)
-        self.text('Y  Add or remove favorite',25,290,18,AMBER)
+        self.text('  ·  '.join(parts) if parts else '',25,207,15,AMBER,width=590)
+        self.marquee(os.path.basename(app.current or ''),25,233,13,MUTED,590)
+        self.text('◀ / ▶  Previous / Next',25,268,18)
+        self.text('Y  Add or remove favorite',25,304,18,AMBER)
         self.mini(app); self.hints([('A','Pause / Play'),('X','Back'),('SELECT','BG')])
 
     def picker(self, app):

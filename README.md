@@ -31,6 +31,8 @@ These captures were taken directly from an RG35XX H running the current app.
 - Browses All Songs, Albums, Artists, Favorites, Recent, and Playlists
   (`.m3u` and `.m3u8`), with folder browsing in Settings.
 - Maintains a queue with shuffle, repeat, previous, next, and automatic advance.
+- Shows the current queue position in Now Playing, such as `3 / 15`.
+- Starts a new queue at the song you choose, so it begins as `1 / total`.
 - Displays embedded or folder artwork and caches it locally.
 - Keeps the now-playing time and progress bar updated from mpv's playback
   position, including recovery after a temporary IPC connection failure.
