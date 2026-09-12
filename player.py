@@ -47,6 +47,125 @@ _VIZ_FREQS = [40.0 * (3800.0/40.0)**(i/(_VIZ_N-1)) for i in range(_VIZ_N)]
 # Goertzel coefficient for each target frequency (precomputed once at startup)
 _VIZ_COEFS = [2.0 * math.cos(2.0 * math.pi * f / _VIZ_SR) for f in _VIZ_FREQS]
 
+
+class MetadataStore:
+    """Use KNULLI's built-in dbm cache, with the old JSON cache as fallback."""
+
+    def __init__(self, dbm_path, json_path):
+        self.dbm_path = dbm_path
+        self.json_path = json_path
+        self.backend = 'json'
+        self._db = None
+        self._data = {}
+        self._dirty = False
+        try:
+            import dbm
+            self._db = dbm.open(self.dbm_path, 'c')
+            self.backend = 'dbm'
+            # Preserve data from Walkman's previous JSON-only cache on upgrade.
+            if not self._db.keys():
+                for path, row in self._read_json().items():
+                    self._db[self._key(path)] = self._encode(row)
+        except Exception as exc:
+            LOG.info('dbm metadata cache unavailable; using JSON: %s', exc)
+            self._switch_to_json()
+
+    @staticmethod
+    def _key(path):
+        return path.encode('utf-8', errors='surrogateescape')
+
+    @staticmethod
+    def _encode(row):
+        return json.dumps(row, separators=(',', ':')).encode('utf-8')
+
+    @staticmethod
+    def _decode(raw):
+        try:
+            row = json.loads(raw.decode('utf-8'))
+            return row if isinstance(row, dict) else None
+        except (UnicodeError, ValueError, TypeError):
+            return None
+
+    def _read_json(self):
+        try:
+            with open(self.json_path, encoding='utf-8') as cache_file:
+                data = json.load(cache_file)
+            return data if isinstance(data, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
+    def _switch_to_json(self):
+        if self._db is not None:
+            try:
+                self._db.close()
+            except Exception:
+                pass
+        self._db = None
+        self.backend = 'json'
+        self._data = self._read_json()
+
+    def get(self, path):
+        if self._db is not None:
+            try:
+                raw = self._db.get(self._key(path))
+                return self._decode(raw) if raw is not None else None
+            except Exception as exc:
+                LOG.info('dbm metadata read failed; switching to JSON: %s', exc)
+                self._switch_to_json()
+        return self._data.get(path)
+
+    def set(self, path, row):
+        if self._db is not None:
+            try:
+                self._db[self._key(path)] = self._encode(row)
+                return
+            except Exception as exc:
+                LOG.info('dbm metadata write failed; switching to JSON: %s', exc)
+                self._switch_to_json()
+        self._data[path] = row
+        self._dirty = True
+
+    def remove(self, path):
+        if self._db is not None:
+            try:
+                del self._db[self._key(path)]
+                return
+            except KeyError:
+                return
+            except Exception as exc:
+                LOG.info('dbm metadata cleanup failed; switching to JSON: %s', exc)
+                self._switch_to_json()
+        if path in self._data:
+            del self._data[path]
+            self._dirty = True
+
+    def paths(self):
+        if self._db is not None:
+            try:
+                return [key.decode('utf-8', errors='surrogateescape') for key in self._db.keys()]
+            except Exception as exc:
+                LOG.info('dbm metadata listing failed; switching to JSON: %s', exc)
+                self._switch_to_json()
+        return list(self._data)
+
+    def close(self):
+        if self._db is not None:
+            try:
+                self._db.close()
+            except Exception as exc:
+                LOG.info('dbm metadata close failed: %s', exc)
+            self._db = None
+        if not self._dirty:
+            return
+        try:
+            tmp = self.json_path + '.tmp'
+            with open(tmp, 'w', encoding='utf-8') as cache_file:
+                json.dump(self._data, cache_file)
+            os.replace(tmp, self.json_path)
+        except OSError as exc:
+            LOG.info('JSON metadata cache write failed: %s', exc)
+
+
 class App:
     categories = ['All Songs','Media','Albums','Artists','Folders','Favorites','Recent','Playlists']
 
@@ -136,6 +255,8 @@ class App:
             except OSError: pass
         self._covers_dir = covers_dir
         self._cache_path = new_meta
+        self._dbm_path = os.path.join(metadata_dir, 'library.db')
+        self._metadata_backend = 'json'
         self._viz_dir = viz_dir
         try:
             with open(self._state_path, encoding='utf-8') as _f: self.state = json.load(_f)
@@ -391,49 +512,43 @@ class App:
         self.tracks = []; self.media = []; self.playlists = []
         os.makedirs(MUSIC, exist_ok=True)
         os.makedirs(VIDEO, exist_ok=True)
-        try:
-            with open(self._cache_path, encoding='utf-8') as _f: cache = json.load(_f)
-        except (OSError, ValueError): cache = {}
+        cache = MetadataStore(self._dbm_path, self._cache_path)
+        self._metadata_backend = cache.backend
         try: from mutagen import File
         except ImportError: File = None
-        found = set(); cache_dirty = False
-        for base, _, files in os.walk(MUSIC):
-            for filename in files:
-                path = os.path.join(base, filename); ext = os.path.splitext(filename)[1].lower()
-                if ext in ('.m3u', '.m3u8'): self.playlists.append(path); continue
-                if ext not in ('.mp3', '.flac', '.ogg', '.wav', '.m4a'): continue
-                self.tracks.append(path); found.add(path)
-                try: st = os.stat(path); mtime = st.st_mtime; size = st.st_size
-                except OSError: mtime = 0.0; size = 0
-                row = cache.get(path)
-                if row and abs(row.get('mtime', -1) - mtime) < 0.001 and row.get('size') == size:
-                    self.metadata[path] = {'title': row.get('title',''), 'artist': row.get('artist',''), 'album': row.get('album','')}
-                    continue
-                meta = {}
-                if File:
-                    try:
-                        tags = File(path, easy=True)
-                        if tags: meta = {k: str(tags.get(k, [''])[0]) for k in ('title','artist','album')}
-                    except Exception: pass
-                else:
-                    try:
-                        result = subprocess.run(['ffprobe','-v','error','-show_entries','format_tags=title,artist,album','-of','json',path],capture_output=True,timeout=3,check=True)
-                        tags = json.loads(result.stdout).get('format',{}).get('tags',{})
-                        meta = {k.lower(): str(v) for k,v in tags.items()}
-                    except (OSError, ValueError, subprocess.SubprocessError): pass
-                self.metadata[path] = meta
-                cache[path] = {'title': meta.get('title',''), 'artist': meta.get('artist',''), 'album': meta.get('album',''), 'mtime': mtime, 'size': size}
-                cache_dirty = True
-        stale = [p for p in list(cache) if p not in found]
-        if stale:
-            for p in stale: del cache[p]
-            cache_dirty = True
-        if cache_dirty:
-            try:
-                tmp = self._cache_path + '.tmp'
-                with open(tmp, 'w', encoding='utf-8') as _f: json.dump(cache, _f)
-                os.replace(tmp, self._cache_path)
-            except OSError: pass
+        found = set()
+        try:
+            for base, _, files in os.walk(MUSIC):
+                for filename in files:
+                    path = os.path.join(base, filename); ext = os.path.splitext(filename)[1].lower()
+                    if ext in ('.m3u', '.m3u8'): self.playlists.append(path); continue
+                    if ext not in ('.mp3', '.flac', '.ogg', '.wav', '.m4a'): continue
+                    self.tracks.append(path); found.add(path)
+                    try: st = os.stat(path); mtime = st.st_mtime; size = st.st_size
+                    except OSError: mtime = 0.0; size = 0
+                    row = cache.get(path)
+                    if row and abs(row.get('mtime', -1) - mtime) < 0.001 and row.get('size') == size:
+                        self.metadata[path] = {'title': row.get('title',''), 'artist': row.get('artist',''), 'album': row.get('album','')}
+                        continue
+                    meta = {}
+                    if File:
+                        try:
+                            tags = File(path, easy=True)
+                            if tags: meta = {k: str(tags.get(k, [''])[0]) for k in ('title','artist','album')}
+                        except Exception: pass
+                    else:
+                        try:
+                            result = subprocess.run(['ffprobe','-v','error','-show_entries','format_tags=title,artist,album','-of','json',path],capture_output=True,timeout=3,check=True)
+                            tags = json.loads(result.stdout).get('format',{}).get('tags',{})
+                            meta = {k.lower(): str(v) for k,v in tags.items()}
+                        except (OSError, ValueError, subprocess.SubprocessError): pass
+                    self.metadata[path] = meta
+                    cache.set(path, {'title': meta.get('title',''), 'artist': meta.get('artist',''), 'album': meta.get('album',''), 'mtime': mtime, 'size': size})
+            for path in cache.paths():
+                if path not in found: cache.remove(path)
+        finally:
+            cache.close()
+            self._metadata_backend = cache.backend
         self.tracks.sort(key=lambda p: self.track_title(p).casefold())
         for base, _, files in os.walk(VIDEO):
             for filename in files:
@@ -705,6 +820,7 @@ class App:
             ('◑  Theme: '+self.state.get('theme','Cassette'), 'theme', None),
             ('◇  Accent color...', 'open_picker', None),
             ('Library', 'header', None),
+            ('Library database: '+('dbm' if self._metadata_backend == 'dbm' else 'JSON fallback'), 'info', None),
             ('Storage', 'header', None),
             *self.storage_rows(),
             ('↺  Rescan music', 'rescan', None),
@@ -1102,8 +1218,9 @@ class App:
                     self.build_viz_cache()
                 elif kind == 'clear_cache':
                     self._scanning = True; self.draw(); pygame.display.flip()
-                    try: os.unlink(self._cache_path)
-                    except OSError: pass
+                    for cache_file in [self._cache_path, self._cache_path + '.tmp'] + glob.glob(self._dbm_path + '*'):
+                        try: os.unlink(cache_file)
+                        except OSError: pass
                     self.metadata = {}; self.scan()
                     self._scanning = False; self.settings()
                 elif kind == 'clear_covers':
