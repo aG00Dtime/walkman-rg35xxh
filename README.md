@@ -111,6 +111,29 @@ For an update, close Walkman and copy the new release's `walkman` folder over
 the existing one. Keep the `music`, `video`, `state.json`, and `.cache`
 contents; they contain your local library and preferences.
 
+## After adding music or media
+
+Walkman does not need to be reinstalled when you add files. Use this workflow:
+
+1. Copy new audio into `roms/ports/walkman/music/`, or copy videos and
+   pictures into `roms/ports/walkman/video/`.
+2. Launch Walkman and stay on the Library screen.
+3. Press **Y** to open the fullscreen **Settings** screen.
+4. Select **Rescan music** and press **A**. This refreshes both the music and
+   Media libraries and updates the JSON metadata cache.
+5. Return with **B**, then open **All Songs** or **Media** to confirm the new
+   files are listed.
+
+New media thumbnails are generated in the background when the Media list is
+opened. For music artwork, use **Settings → Fetch cover art...** and choose
+**Missing only**. To prepare every visualizer file before playback, choose
+**Settings → Build visualizer cache**. The current filename and progress bar
+are shown while processing; press **B** to cancel.
+
+If a file was renamed, moved, or removed, run **Rescan music** again. If old
+artwork remains after a change, clear the cover-art cache from Settings and
+open the affected library again.
+
 ## Manual installation from source
 
 1. Install PortMaster on KNULLI.
