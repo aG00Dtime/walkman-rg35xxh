@@ -1,3 +1,4 @@
+import array
 import sys
 from pathlib import Path
 import tempfile
@@ -8,6 +9,7 @@ sys.path.insert(0, str(ROOT))
 
 try:
     import player
+    import convert_viz_cache
 except ModuleNotFoundError as error:
     if error.name != 'pygame':
         raise
@@ -69,6 +71,20 @@ class PlayerSurfaceTests(unittest.TestCase):
             self.assertTrue(player.App._viz_cache_valid(None, str(cache)))
             cache.write_bytes(b'old-cache')
             self.assertFalse(player.App._viz_cache_valid(None, str(cache)))
+
+    def test_legacy_viz_cache_converter(self):
+        with tempfile.TemporaryDirectory() as directory:
+            legacy = Path(directory) / 'track.viz'
+            values = array.array('f', [0.5] * (convert_viz_cache.OLD_BARS * 2))
+            with legacy.open('wb') as cache_file:
+                values.tofile(cache_file)
+            self.assertEqual(convert_viz_cache.convert(str(legacy)), 'converted')
+            converted = Path(str(legacy) + '2')
+            self.assertFalse(legacy.exists())
+            self.assertEqual(
+                converted.read_bytes(),
+                convert_viz_cache.MAGIC + bytes([128] * convert_viz_cache.NEW_BARS * 2),
+            )
 
     def test_search_matches_song_metadata_media_albums_and_artists(self):
         class SearchData:

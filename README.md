@@ -14,7 +14,13 @@ These captures were taken directly from an RG35XX H running the current app.
   <img src="./screenshots/walkman-cassette.png" alt="Walkman cassette player screen" width="31%">
 </div>
 
-## Latest changes — v1.0.10
+## Latest changes — v1.0.11
+
+- New generated album covers, artist pictures, and media thumbnails use compact
+  JPEG files. The included `convert_cover_cache.py` tool converts old PNG
+  caches safely; artist pictures are reduced to 128px to save more space.
+- Both visualizer and artwork conversion tools are included in release
+  packages, so existing device caches can be upgraded without rebuilding.
 
 - Visualizer caching is now lighter and faster: it streams processing instead
   of holding whole songs in memory, uses 20 smooth bars at 6 updates per
@@ -257,7 +263,7 @@ walkman/
 ├── state.json                 # created on first run
 └── .cache/                    # created on first run
     ├── metadata/metadata.json
-    ├── covers/*.png
+    ├── covers/*.jpg
     └── visualizer/*.viz2
 ```
 
@@ -267,12 +273,22 @@ your own files; personal media is never included in source or release assets.
 The cache is organized by function:
 
 - `metadata/metadata.json` stores tags and file information.
-- `covers/` stores extracted or downloaded artwork and media thumbnails.
+- `covers/` stores compact JPEG artwork and media thumbnails.
 - `visualizer/` stores compact precomputed visualizer data for faster playback.
 
 Settings can clear each cache type independently. The visualizer builder can
 be cancelled with **B** and will continue from valid cache files on a later
 run.
+
+After upgrading from an older Walkman release, you can convert existing
+visualizer files instead of rebuilding them. From the Walkman folder on the
+device, run `python3 convert_viz_cache.py`. It creates compact `.viz2` files
+and removes each old `.viz` file only after that conversion succeeds.
+
+New artwork caches use compact JPEG files. To convert older PNG artwork caches
+and reclaim their space, run `python3 convert_cover_cache.py` from the
+Walkman folder. Artist pictures are reduced to 128px during conversion; old
+PNG files are removed only after their JPEG replacement is verified.
 
 ## Troubleshooting
 

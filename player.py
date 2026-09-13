@@ -250,7 +250,7 @@ class App:
             for name in os.listdir(_cache_dir):
                 source = os.path.join(_cache_dir, name)
                 if not os.path.isfile(source): continue
-                target_dir = covers_dir if name.endswith('.png') else viz_dir if name.endswith(('.viz', '.viz2')) else None
+                target_dir = covers_dir if name.endswith(('.png', '.jpg')) else viz_dir if name.endswith(('.viz', '.viz2')) else None
                 if target_dir:
                     try: os.replace(source, os.path.join(target_dir, name))
                     except OSError: pass
@@ -591,7 +591,7 @@ class App:
             if self._fetch_cancel: break
             self._fetch_status = f'Checking art: {os.path.basename(path)[:34]}\n{idx+1} of {len(tracks)}'
             h = hashlib.md5((path+':64').encode()).hexdigest()
-            cached = os.path.join(self._covers_dir, h+'.png')
+            cached = self._cover_cache_path(h)
             if mode == 'missing' and os.path.isfile(cached): continue
             meta = self.metadata.get(path, {})
             artist = meta.get('artist', '').strip()
@@ -625,6 +625,7 @@ class App:
                 with open(tmp_raw, 'wb') as f: f.write(img_data)
                 subprocess.run(['ffmpeg','-y','-v','error','-i',tmp_raw,
                                '-vf','scale=64:64:force_original_aspect_ratio=increase,crop=64:64',
+                               '-q:v','8',
                                cached],
                               stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                               stderr=subprocess.DEVNULL, timeout=5)
@@ -635,7 +636,7 @@ class App:
     def _artist_cache_path(self, artist):
         """Return the one local thumbnail path shared by an artist's albums."""
         digest = hashlib.md5((artist.casefold() + ':artist:200').encode('utf-8')).hexdigest()
-        return os.path.join(self._covers_dir, 'artist-' + digest + '.png')
+        return self._cover_cache_path('artist-' + digest)
 
     def _fetch_artist_art_worker(self, mode):
         """Fetch optional artist photos from TheAudioDB and save them locally."""
@@ -682,7 +683,8 @@ class App:
                         image_file.write(image_data)
                     subprocess.run([
                         'ffmpeg', '-y', '-v', 'error', '-i', raw,
-                        '-vf', 'scale=200:200:force_original_aspect_ratio=increase,crop=200:200',
+                        '-vf', 'scale=128:128:force_original_aspect_ratio=increase,crop=128:128',
+                        '-q:v', '8',
                         cached,
                     ], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
                     if os.path.isfile(cached):
@@ -844,8 +846,8 @@ class App:
         self.current_info = self._fetch_info(self.current)
         # Load cover from cache or temp file (no ffmpeg at startup)
         h = hashlib.md5((self.current+':64').encode()).hexdigest()
-        cached = os.path.join(self._covers_dir, h+'.png')
-        if os.path.isfile(cached):
+        cached = self._existing_cover_path(self._cover_cache_path(h))
+        if cached and os.path.isfile(cached):
             try: self.cover = pygame.image.load(cached)
             except pygame.error: pass
         elif os.path.isfile('/tmp/walkman-cover.png'):
@@ -863,16 +865,16 @@ class App:
             if key in self.group_covers or key in self._cover_ready: continue
             found = None
             if isinstance(key, tuple) and key[0] == 'Artists':
-                artist_cached = self._artist_cache_path(key[1])
-                if os.path.isfile(artist_cached):
+                artist_cached = self._existing_cover_path(self._artist_cache_path(key[1]))
+                if artist_cached and os.path.isfile(artist_cached):
                     found = artist_cached
             for path in paths[:5]:
                 if found:
                     break
                 h = hashlib.md5((path+':48').encode()).hexdigest()
-                cached = os.path.join(self._covers_dir, h+'.png')
+                cached = self._cover_cache_path(h)
                 if not os.path.isfile(cached):
-                    try: subprocess.run(['ffmpeg','-v','error','-i',path,'-map','0:v:0','-frames:v','1','-vf','scale=48:48:force_original_aspect_ratio=decrease,pad=48:48:(ow-iw)/2:(oh-ih)/2',cached],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=3)
+                    try: subprocess.run(['ffmpeg','-v','error','-i',path,'-map','0:v:0','-frames:v','1','-vf','scale=48:48:force_original_aspect_ratio=decrease,pad=48:48:(ow-iw)/2:(oh-ih)/2','-q:v','8',cached],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=3)
                     except (OSError, subprocess.SubprocessError): pass
                 if os.path.isfile(cached): found = cached; break
             if not found:
@@ -883,9 +885,9 @@ class App:
                     seen.add(d); img = self._find_folder_art(path)
                     if img:
                         h = hashlib.md5((img+':48').encode()).hexdigest()
-                        cached = os.path.join(self._covers_dir, h+'.png')
+                        cached = self._cover_cache_path(h)
                         if not os.path.isfile(cached):
-                            try: subprocess.run(['ffmpeg','-v','error','-i',img,'-vf','scale=48:48:force_original_aspect_ratio=decrease,pad=48:48:(ow-iw)/2:(oh-ih)/2',cached],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=3)
+                            try: subprocess.run(['ffmpeg','-v','error','-i',img,'-vf','scale=48:48:force_original_aspect_ratio=decrease,pad=48:48:(ow-iw)/2:(oh-ih)/2','-q:v','8',cached],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=3)
                             except (OSError, subprocess.SubprocessError): pass
                         if os.path.isfile(cached): found = cached; break
             with self._cover_lock:
@@ -927,6 +929,17 @@ class App:
         tmp = self._state_path + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as _f: json.dump(self.state, _f)
         os.replace(tmp, self._state_path)
+
+    def _cover_cache_path(self, digest):
+        """All newly generated artwork uses compact, lossy JPEG files."""
+        return os.path.join(self._covers_dir, digest + '.jpg')
+
+    @staticmethod
+    def _existing_cover_path(path):
+        if os.path.isfile(path):
+            return path
+        legacy = os.path.splitext(path)[0] + '.png'
+        return legacy if os.path.isfile(legacy) else None
 
     def build_viz_cache(self):
         if self._fetch_status is not None: return
@@ -1138,35 +1151,38 @@ class App:
         meta = self.metadata.get(path, {})
         ar = meta.get('artist','').strip(); al = meta.get('album','').strip()
         if not ar or not al: return None
-        return os.path.join(self._covers_dir, hashlib.md5(f'{ar}:{al}:64'.encode()).hexdigest()+'.png')
+        return self._cover_cache_path(hashlib.md5(f'{ar}:{al}:64'.encode()).hexdigest())
 
     def _load_cover_for(self, path):
         self.cover = None
         h = hashlib.md5((path+':64').encode()).hexdigest()
-        cached = os.path.join(self._covers_dir, h+'.png')
+        cached = self._cover_cache_path(h)
         # Fast path 1: track-specific cache
-        if os.path.isfile(cached):
-            try: self.cover = pygame.image.load(cached); return
+        existing = self._existing_cover_path(cached)
+        if existing:
+            try: self.cover = pygame.image.load(existing); return
             except pygame.error: pass
         # Fast path 2: album-level cache (shared across tracks on same album)
         alb = self._album_cache_path(path)
-        if alb and os.path.isfile(alb):
-            try:
-                import shutil; shutil.copy2(alb, cached)
-            except OSError: pass
-            try: self.cover = pygame.image.load(alb); return
+        existing_album = self._existing_cover_path(alb) if alb else None
+        if existing_album:
+            if existing_album == alb:
+                try:
+                    import shutil; shutil.copy2(existing_album, cached)
+                except OSError: pass
+            try: self.cover = pygame.image.load(existing_album); return
             except pygame.error: pass
         # Slow path: background extraction thread so poll() never blocks
         threading.Thread(target=self._extract_cover_bg, args=(path, cached), daemon=True).start()
 
     def _extract_cover_bg(self, path, cached):
         result = None
-        tmp = f'/tmp/walkman-cover-{threading.get_ident()}.png'
+        tmp = f'/tmp/walkman-cover-{threading.get_ident()}.jpg'
         try: os.unlink(tmp)
         except OSError: pass
         try:
             subprocess.run(['ffmpeg','-v','error','-i',path,'-map','0:v:0','-frames:v','1',
-                           '-vf','scale=64:64:force_original_aspect_ratio=increase,crop=64:64',tmp],
+                           '-vf','scale=64:64:force_original_aspect_ratio=increase,crop=64:64','-q:v','8',tmp],
                           stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=3)
             if os.path.isfile(tmp):
                 try:
@@ -1177,11 +1193,11 @@ class App:
             img = self._find_folder_art(path)
             if img:
                 ih = hashlib.md5((img+':64').encode()).hexdigest()
-                icached = os.path.join(self._covers_dir, ih+'.png')
+                icached = self._cover_cache_path(ih)
                 if not os.path.isfile(icached):
                     try:
                         subprocess.run(['ffmpeg','-v','error','-i',img,
-                                       '-vf','scale=64:64:force_original_aspect_ratio=increase,crop=64:64',icached],
+                                       '-vf','scale=64:64:force_original_aspect_ratio=increase,crop=64:64','-q:v','8',icached],
                                       stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=3)
                     except (OSError, subprocess.SubprocessError): pass
                 if os.path.isfile(icached):
@@ -1523,7 +1539,7 @@ class App:
                 elif kind == 'clear_covers':
                     self._scanning = True; self.draw(); pygame.display.flip()
                     import glob as _glob
-                    for f in _glob.glob(os.path.join(self._covers_dir, '*.png')):
+                    for f in _glob.glob(os.path.join(self._covers_dir, '*.png')) + _glob.glob(os.path.join(self._covers_dir, '*.jpg')):
                         try: os.unlink(f)
                         except OSError: pass
                     self.cover = None; self.group_covers = {}
