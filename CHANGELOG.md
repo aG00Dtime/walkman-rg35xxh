@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [1.0.14] - 2026-09-13
 
 - Simplified the release archive: extract it, then copy its single `walkman`
   folder directly into `roms/ports/`.
