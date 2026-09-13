@@ -320,7 +320,9 @@ class App:
         if surface is None:
             return ()
         try:
-            sample = pygame.transform.smoothscale(surface, (20, 20))
+            # Ordinary scale works for indexed-color artwork too; smoothscale
+            # rejects those surfaces on the handheld pygame build.
+            sample = pygame.transform.scale(surface, (20, 20))
             buckets = {}
             for y in range(20):
                 for x in range(20):
@@ -362,7 +364,7 @@ class App:
                     (min(255, red * 150 // 100), min(255, green * 150 // 100), min(255, blue * 150 // 100)),
                 )
             return tuple(choices)
-        except pygame.error:
+        except (pygame.error, ValueError):
             return ()
 
     @staticmethod

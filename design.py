@@ -106,6 +106,35 @@ class Design:
         pygame.draw.line(self.s, LINE if color is None else color, a, b, w)
 
     @staticmethod
+    def scale_art(surface, size):
+        """Scale artwork without rejecting indexed-color PNG/GIF images."""
+        try:
+            if surface.get_bitsize() in (24, 32):
+                return pygame.transform.smoothscale(surface, size)
+        except (AttributeError, pygame.error, ValueError):
+            pass
+        return pygame.transform.scale(surface, size)
+
+    def playback_progress(self, app, x, y, width, height):
+        """Draw a playback bar using the dynamic artwork palette when enabled."""
+        pygame.draw.rect(self.s, LINE, (x, y, width, height), border_radius=height // 2)
+        if not app.duration:
+            return
+        filled = int(width * min(1, app.position / app.duration))
+        if filled <= 0:
+            return
+        palette = app.viz_palette()
+        if not palette:
+            pygame.draw.rect(self.s, AMBER, (x, y, filled, height), border_radius=height // 2)
+            return
+        steps = min(26, filled)
+        for index in range(steps):
+            left = x + index * filled // steps
+            right = x + (index + 1) * filled // steps
+            pygame.draw.rect(self.s, self._palette_color(palette, index, steps),
+                             (left, y, max(1, right - left), height))
+
+    @staticmethod
     def _palette_color(palette, index, total):
         if not palette:
             return AMBER
@@ -188,7 +217,7 @@ class Design:
     def mini(self, app):
         self.line((22,361),(618,361))
         pygame.draw.rect(self.s,PANEL,(25,373,59,51),border_radius=3)
-        if getattr(app,'cover',None): self.s.blit(pygame.transform.smoothscale(app.cover,(59,51)),(25,373))
+        if getattr(app,'cover',None): self.s.blit(self.scale_art(app.cover,(59,51)),(25,373))
         elif app.current: self.icon('Albums',54,399,AMBER)
         self.marquee(app.track_title(),103,377,20,WHITE,270)
         self.marquee(app.artist(),103,405,15,MUTED,270)
@@ -254,7 +283,7 @@ class Design:
                 tsz=row_h-8; ty=y+4
                 pygame.draw.rect(self.s,BG,(25,ty,tsz,tsz),border_radius=4)
                 if cover:
-                    self.s.blit(pygame.transform.smoothscale(cover,(tsz,tsz)),(25,ty))
+                    self.s.blit(self.scale_art(cover,(tsz,tsz)),(25,ty))
                 else:
                     pygame.draw.circle(self.s,MUTED if not selected else BG,(25+tsz//2,ty+tsz//2),tsz//4,2)
                 if selected:
@@ -372,8 +401,7 @@ class Design:
                 if bh>8: pygame.draw.rect(self.s,shade,(x0,by+8,bw,bh-8))
 
         pos,dur=app.position,app.duration
-        pygame.draw.rect(self.s,LINE,(78,340,484,5),border_radius=2)
-        if dur>0: pygame.draw.rect(self.s,AMBER,(78,340,int(484*min(1,pos/dur)),5),border_radius=2)
+        self.playback_progress(app,78,340,484,5)
         self.text(app.time_label(pos),38,343,13,center=True)
         self.text(app.time_label(dur) if dur else '--:--',602,343,13,center=True)
         if app.queue_position_label(): self.text(app.queue_position_label(),320,352,13,MUTED,center=True)
@@ -446,8 +474,7 @@ class Design:
                 pygame.draw.polygon(self.s,AMBER,pts)
         pos,dur=app.position,app.duration
         self.text(app.time_label(pos),25,378,15)
-        pygame.draw.rect(self.s,LINE,(85,386,470,5),border_radius=2)
-        if dur>0: pygame.draw.rect(self.s,AMBER,(85,386,int(470*min(1,pos/dur)),5),border_radius=2)
+        self.playback_progress(app,85,386,470,5)
         self.text(app.time_label(dur) if dur else '--:--',595,386,15,center=True)
         if app.queue_position_label(): self.text(app.queue_position_label(),320,399,13,MUTED,center=True)
         self.text('◀  Previous',25,408,13,MUTED)
@@ -461,8 +488,7 @@ class Design:
         self.marquee(app.artist(),25,105,20,MUTED,500)
         self.marquee(app.album(),25,135,18,MUTED,590)
         pos,dur=app.position,app.duration
-        pygame.draw.rect(self.s,LINE,(25,166,590,5),border_radius=2)
-        if dur>0: pygame.draw.rect(self.s,AMBER,(25,166,int(590*min(1,pos/dur)),5),border_radius=2)
+        self.playback_progress(app,25,166,590,5)
         self.text(app.time_label(pos),25,178,13,MUTED)
         self.text(app.time_label(dur) if dur else '--:--',615,178,13,MUTED,center=True)
         info=app.current_info; parts=[]

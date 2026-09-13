@@ -53,6 +53,12 @@ class PlayerSurfaceTests(unittest.TestCase):
         self.assertGreater(color[2], color[0])
         self.assertEqual(color, (35, 130, 220))
 
+    def test_indexed_artwork_scales_without_smoothscale(self):
+        art = player.pygame.Surface((4, 4), depth=8)
+        art.fill(1)
+        scaled = player.Design.scale_art(art, (20, 20))
+        self.assertEqual(scaled.get_size(), (20, 20))
+
     def test_search_matches_song_metadata_media_albums_and_artists(self):
         class SearchData:
             tracks = ['/music/one.mp3', '/music/two.mp3']

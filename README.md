@@ -14,13 +14,15 @@ These captures were taken directly from an RG35XX H running the current app.
   <img src="./screenshots/walkman-cassette.png" alt="Walkman cassette player screen" width="31%">
 </div>
 
-## Latest changes — v1.0.7
+## Latest changes — v1.0.8
 
 - Fixed the handheld controls: **SELECT** now closes the Walkman screen while
   music keeps playing, and **START** fully exits Walkman and stops playback.
 - Added the optional **Dynamic visualizer** setting. It uses a brighter,
-  stable blend of the current cover-art colors across the bars; grayscale
-  artwork uses the selected theme color instead.
+  stable blend of the current cover-art colors across both the visualizer and
+  Now Playing progress bars; grayscale artwork uses the selected theme color.
+- Fixed crashes from indexed-color PNG and GIF thumbnails in media and album
+  lists. Those files now use a compatible scaler automatically.
 - Fixed incorrect controller mappings that could make SELECT behave like an
   exit or leave START unresponsive.
 
