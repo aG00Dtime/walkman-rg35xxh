@@ -88,7 +88,6 @@ class App:
         self.socket_path = '/tmp/walkman-mpv.sock'
         self._owns_mpv = False; self._exit_keep_mpv = False; self.current_info = {}
         self._exit_notice = None
-        self._sleep_inhibitor = self._find_sleep_inhibitor()
         self._volume = None; self._volume_shown_until = 0.0; self._battery = None
         self._sel_flash_t = 0.0
         self._viz_bars = [0.0] * _VIZ_N
@@ -182,25 +181,6 @@ class App:
                 if channels == 2: buf.append(s)
             return pygame.mixer.Sound(buffer=buf)
         except Exception: return None
-
-    @staticmethod
-    def _find_sleep_inhibitor():
-        """Return a usable idle/sleep inhibitor, without making it required."""
-        inhibitor = shutil.which('systemd-inhibit')
-        if not inhibitor:
-            return None
-        try:
-            probe = [inhibitor, '--what=idle:sleep', '--mode=block',
-                     '--who=Walkman', '--why=Walkman playback probe', '--', 'true']
-            if subprocess.run(probe, stdin=subprocess.DEVNULL,
-                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                              timeout=1).returncode == 0:
-                LOG.info('sleep inhibitor available: %s', inhibitor)
-                return inhibitor
-        except (OSError, subprocess.SubprocessError):
-            pass
-        LOG.info('sleep inhibitor unavailable; continuing without it')
-        return None
 
     def _make_sweep(self, f0=200, f1=600, dur=0.06, vol=0.2):
         try:
@@ -1219,12 +1199,6 @@ class App:
             flags = [] if self.media_type == 'video' else ['--no-video','--audio-display=no']
             cmd = ['mpv','--no-config',*flags,'--idle=yes','--keep-open=no',
                    '--input-terminal=no','--really-quiet','--input-ipc-server='+self.socket_path,'--',path]
-        # KNULLI can put the handheld to sleep while an audio-only player is
-        # idle. Keep the inhibitor alive with mpv itself so SELECT background
-        # playback remains protected after the Walkman UI exits.
-        if self._sleep_inhibitor:
-            cmd = [self._sleep_inhibitor, '--what=idle:sleep', '--mode=block',
-                   '--who=Walkman', '--why=Walkman playback is active', '--', *cmd]
         self.proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         self._owns_mpv = True
         self.current = path; self.queue_index = start; self.position = 0.; self.duration = 0.; self.paused = False

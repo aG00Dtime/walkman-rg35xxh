@@ -20,7 +20,25 @@ if [ -f "$GAMEDIR/cover.png" ]; then
   cp -f "$GAMEDIR/cover.png" "$PM_IMAGES/walkman.screenshot.png"
 fi
 export SDL_GAMECONTROLLERCONFIG="$sdl_controllerconfig"
-cleanup() { pm_finish 2>/dev/null || true; }
+# KNULLI's own battery-saver service watches this marker. It is the same
+# mechanism used by Jellyfin RG35XX.
+BATTSAVER_PAUSE="/var/run/battery-saver/walkman.pause"
+WALKMAN_MPV_SOCKET="/tmp/walkman-mpv.sock"
+mkdir -p "${BATTSAVER_PAUSE%/*}"
+: > "$BATTSAVER_PAUSE"
+cleanup() {
+  # SELECT can leave mpv playing after this launcher exits. Keep the marker
+  # until Walkman's unique mpv socket disappears, then clear it automatically.
+  if [ -S "$WALKMAN_MPV_SOCKET" ]; then
+    (
+      while [ -S "$WALKMAN_MPV_SOCKET" ]; do sleep 2; done
+      rm -f "$BATTSAVER_PAUSE"
+    ) &
+  else
+    rm -f "$BATTSAVER_PAUSE"
+  fi
+  pm_finish 2>/dev/null || true
+}
 trap cleanup EXIT
 pm_platform_helper "$GAMEDIR/player.py" 2>/dev/null || true
 python3 ./player.py

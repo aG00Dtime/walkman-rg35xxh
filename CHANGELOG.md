@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.15] - 2026-09-13
+
+- Fixed KNULLI sleeping during Walkman playback. Walkman now uses KNULLI's
+  battery-saver pause marker, including after SELECT sends music to background
+  playback, and clears it automatically once playback ends.
+
 ## [1.0.14] - 2026-09-13
 
 - Simplified the release archive: extract it, then copy its single `walkman`
