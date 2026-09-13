@@ -1,0 +1,24 @@
+{
+  "sqlite_version": "3.53.4",
+  "source_url": "https://sqlite.org/2026/sqlite-amalgamation-3530400.zip",
+  "source_sha3_256": "628a44cfe82c66aed1ccbbe85a562d2e33ebe64b3288981ed76285612227934e",
+  "compiler": "Zig 0.15.2",
+  "target": "aarch64-linux-gnu.2.17",
+  "flags": [
+    "-O2",
+    "-shared",
+    "-fPIC",
+    "-s",
+    "-DSQLITE_THREADSAFE=1",
+    "-DSQLITE_DEFAULT_MEMSTATUS=0",
+    "-DSQLITE_OMIT_LOAD_EXTENSION",
+    "-DSQLITE_DQS=0",
+    "-DSQLITE_TEMP_STORE=3",
+    "-Wl,-Bsymbolic",
+    "-lpthread",
+    "-lm"
+  ],
+  "library": "libwalkman_sqlite3.so",
+  "sha256": "47d003611f90b88feb840bd7a4d6167b4ce79d438633a9915b2eef7d834f4f3d",
+  "size_bytes": 1150016
+}

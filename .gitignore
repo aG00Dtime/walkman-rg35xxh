@@ -1,6 +1,11 @@
 # Runtime state and generated media data
 state.json
 .cache/
+.covers/
+metadata_cache.json
+log.txt
+/sqlite-test.db
+/walkman-db-test*
 
 # Local music and media
 music/*

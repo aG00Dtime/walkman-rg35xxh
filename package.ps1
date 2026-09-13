@@ -3,6 +3,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+python ./tools/verify_native.py
+if ($LASTEXITCODE -ne 0) { throw "Bundled SQLite verification failed" }
 $stage = Join-Path ([System.IO.Path]::GetTempPath()) ("walkman-rg35xxh-" + [guid]::NewGuid().ToString('N'))
 $appFolder = Join-Path $stage "walkman"
 New-Item -ItemType Directory -Path (Join-Path $appFolder "music") -Force | Out-Null
@@ -12,10 +14,13 @@ $files = @(
   "Walkman.sh",
   "player.py",
   "design.py",
+  "metadata_store.py",
+  "native_sqlite.py",
   "convert_viz_cache.py",
   "convert_cover_cache.py",
   "gameinfo.xml",
   "README.md",
+  "LICENSE",
   "font.ttf",
   "font-LICENSE.txt",
   "cover.png"
@@ -23,8 +28,29 @@ $files = @(
 foreach ($file in $files) {
   Copy-Item -LiteralPath (Join-Path "." $file) -Destination (Join-Path $appFolder $file)
 }
+
+# port.json goes at the ZIP root alongside the walkman/ folder, not inside it.
+Copy-Item -LiteralPath "port.json" -Destination (Join-Path $stage "port.json")
 Copy-Item -LiteralPath "music/.gitkeep" -Destination (Join-Path $appFolder "music/.gitkeep")
 Copy-Item -LiteralPath "video/.gitkeep" -Destination (Join-Path $appFolder "video/.gitkeep")
+
+# A Windows checkout must produce the same runnable shell script as Linux.
+$launcherPath = Join-Path $appFolder "Walkman.sh"
+$launcherText = [System.IO.File]::ReadAllText($launcherPath).Replace("`r`n", "`n")
+[System.IO.File]::WriteAllText($launcherPath, $launcherText, [System.Text.UTF8Encoding]::new($false))
+
+# Only ship the supported engine and its documentation, never local test builds.
+$nativeFiles = @(
+  "native/README.md",
+  "native/SQLITE-NOTICE.txt",
+  "native/linux-aarch64/build.json",
+  "native/linux-aarch64/libwalkman_sqlite3.so"
+)
+foreach ($file in $nativeFiles) {
+  $destination = Join-Path $appFolder $file
+  New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+  Copy-Item -LiteralPath $file -Destination $destination
+}
 
 $outputPath = [System.IO.Path]::GetFullPath($Output)
 if (Test-Path -LiteralPath $outputPath) {
@@ -49,13 +75,20 @@ try {
   $archive.Dispose()
 }
 $required = @(
+  'port.json',
   'walkman/Walkman.sh',
   'walkman/player.py',
   'walkman/design.py',
+  'walkman/metadata_store.py',
+  'walkman/native_sqlite.py',
+  'walkman/native/linux-aarch64/libwalkman_sqlite3.so',
+  'walkman/native/linux-aarch64/build.json',
+  'walkman/native/SQLITE-NOTICE.txt',
   'walkman/convert_viz_cache.py',
   'walkman/convert_cover_cache.py',
   'walkman/gameinfo.xml',
   'walkman/README.md',
+  'walkman/LICENSE',
   'walkman/font.ttf',
   'walkman/font-LICENSE.txt',
   'walkman/cover.png',

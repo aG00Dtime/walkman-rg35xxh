@@ -21,6 +21,7 @@ import urllib.request
 import urllib.parse
 import pygame
 from design import Design, THEMES
+from metadata_store import MetadataStore
 
 try:
     import numpy as _np
@@ -53,124 +54,6 @@ SEARCH_LAYERS = (
 )
 
 
-class MetadataStore:
-    """Use KNULLI's built-in dbm cache, with the old JSON cache as fallback."""
-
-    def __init__(self, dbm_path, json_path):
-        self.dbm_path = dbm_path
-        self.json_path = json_path
-        self.backend = 'json'
-        self._db = None
-        self._data = {}
-        self._dirty = False
-        try:
-            import dbm
-            self._db = dbm.open(self.dbm_path, 'c')
-            self.backend = 'dbm'
-            # Preserve data from Walkman's previous JSON-only cache on upgrade.
-            if not self._db.keys():
-                for path, row in self._read_json().items():
-                    self._db[self._key(path)] = self._encode(row)
-        except Exception as exc:
-            LOG.info('dbm metadata cache unavailable; using JSON: %s', exc)
-            self._switch_to_json()
-
-    @staticmethod
-    def _key(path):
-        return path.encode('utf-8', errors='surrogateescape')
-
-    @staticmethod
-    def _encode(row):
-        return json.dumps(row, separators=(',', ':')).encode('utf-8')
-
-    @staticmethod
-    def _decode(raw):
-        try:
-            row = json.loads(raw.decode('utf-8'))
-            return row if isinstance(row, dict) else None
-        except (UnicodeError, ValueError, TypeError):
-            return None
-
-    def _read_json(self):
-        try:
-            with open(self.json_path, encoding='utf-8') as cache_file:
-                data = json.load(cache_file)
-            return data if isinstance(data, dict) else {}
-        except (OSError, ValueError):
-            return {}
-
-    def _switch_to_json(self):
-        if self._db is not None:
-            try:
-                self._db.close()
-            except Exception:
-                pass
-        self._db = None
-        self.backend = 'json'
-        self._data = self._read_json()
-
-    def get(self, path):
-        if self._db is not None:
-            try:
-                raw = self._db.get(self._key(path))
-                return self._decode(raw) if raw is not None else None
-            except Exception as exc:
-                LOG.info('dbm metadata read failed; switching to JSON: %s', exc)
-                self._switch_to_json()
-        return self._data.get(path)
-
-    def set(self, path, row):
-        if self._db is not None:
-            try:
-                self._db[self._key(path)] = self._encode(row)
-                return
-            except Exception as exc:
-                LOG.info('dbm metadata write failed; switching to JSON: %s', exc)
-                self._switch_to_json()
-        self._data[path] = row
-        self._dirty = True
-
-    def remove(self, path):
-        if self._db is not None:
-            try:
-                del self._db[self._key(path)]
-                return
-            except KeyError:
-                return
-            except Exception as exc:
-                LOG.info('dbm metadata cleanup failed; switching to JSON: %s', exc)
-                self._switch_to_json()
-        if path in self._data:
-            del self._data[path]
-            self._dirty = True
-
-    def paths(self):
-        if self._db is not None:
-            try:
-                return [key.decode('utf-8', errors='surrogateescape') for key in self._db.keys()]
-            except Exception as exc:
-                LOG.info('dbm metadata listing failed; switching to JSON: %s', exc)
-                self._switch_to_json()
-        return list(self._data)
-
-    def close(self):
-        if self._db is not None:
-            try:
-                self._db.close()
-            except Exception as exc:
-                LOG.info('dbm metadata close failed: %s', exc)
-            self._db = None
-        if not self._dirty:
-            return
-        try:
-            tmp = self.json_path + '.tmp'
-            with open(tmp, 'w', encoding='utf-8') as cache_file:
-                json.dump(self._data, cache_file)
-            os.replace(tmp, self.json_path)
-        except OSError as exc:
-            LOG.info('JSON metadata cache write failed: %s', exc)
-
-
 class App:
     categories = ['All Songs','Media','Albums','Artists','Favorites','Recent','Playlists','Settings']
     SEARCH_LAYERS = SEARCH_LAYERS
@@ -193,6 +76,9 @@ class App:
         self._r1_down_at = None
         self._lock_anim_kind = None
         self._lock_anim_started = 0.0
+        self._saved_brightness = None
+        self._screen_dim_applied = False
+        self._lock_drawn = False
         self.sel = 0; self.rows = []; self.heading = 'All Songs'; self.stack = []
         self._search = None
         self.current = None; self.position = 0.; self.duration = 0.; self.media_type = 'audio'
@@ -565,13 +451,58 @@ class App:
         if self.current and self.media_type == 'audio' and not self.screen_locked:
             self.screen_locked = True
             self._lock_anim_kind = 'lock'; self._lock_anim_started = time.monotonic()
+            self._screen_dim_applied = False
+            self._lock_drawn = False
             self._play_sound(self._snd_lock)
 
     def _unlock_screen(self):
         if self.screen_locked:
             self.screen_locked = False
             self._lock_anim_kind = 'unlock'; self._lock_anim_started = time.monotonic()
+            self._restore_brightness()
+            self._lock_drawn = False
             self._play_sound(self._snd_unlock)
+
+    def _read_brightness(self):
+        """Return current brightness as a percentage (0-100), or None."""
+        try:
+            r = subprocess.run(['knulli-brightness'], capture_output=True, text=True, timeout=2)
+            if r.returncode == 0:
+                return int(r.stdout.strip())
+        except (OSError, ValueError, subprocess.SubprocessError):
+            pass
+        return None
+
+    def _set_brightness(self, pct):
+        """Set brightness to pct (0-100). Returns True on success."""
+        try:
+            r = subprocess.run(['knulli-brightness', str(int(pct))],
+                               capture_output=True, timeout=2)
+            if r.returncode == 0:
+                return True
+            LOG.warning('knulli-brightness %d failed: %s', pct, r.stderr.decode().strip())
+        except (OSError, subprocess.SubprocessError) as exc:
+            LOG.warning('knulli-brightness unavailable: %s', exc)
+        return False
+
+    def _apply_lock_dim(self):
+        dim_map = {'Off': None, 'Low': 30, 'Medium': 15, 'Dark': 5}
+        pct = dim_map.get(self.state.get('lock_dim', 'Medium'))
+        self._screen_dim_applied = True
+        if pct is None:
+            return
+        cur = self._read_brightness()
+        LOG.info('lock dim: %s%% -> %s%%', cur, pct)
+        if cur is not None:
+            self._saved_brightness = cur
+        self._set_brightness(pct)
+
+    def _restore_brightness(self):
+        if self._saved_brightness is not None:
+            LOG.info('restore brightness: %d%%', self._saved_brightness)
+            self._set_brightness(self._saved_brightness)
+            self._saved_brightness = None
+        self._screen_dim_applied = False
 
     def _mb_search(self, artist, album):
         q = urllib.parse.quote(f'artist:"{artist}" release:"{album}"')
@@ -767,14 +698,19 @@ class App:
         except Exception: return None
 
     def _vol_worker(self):
-        bat_tick = 0
+        last_bat = 0.0
         while self.running:
+            locked = self.screen_locked
             v = self._read_volume()
             if v is not None and v != self._volume:
-                self._volume = v; self._volume_shown_until = time.monotonic() + 2.0
-            bat_tick += 1
-            if bat_tick >= 20: bat_tick = 0; self._battery = self._read_battery()
-            time.sleep(0.25)
+                self._volume = v
+                if not locked:
+                    self._volume_shown_until = time.monotonic() + 2.0
+            now = time.monotonic()
+            if now - last_bat >= 30.0:
+                last_bat = now
+                self._battery = self._read_battery()
+            time.sleep(5.0 if locked else 1.0)
 
     def _find_folder_art(self, path):
         folder = os.path.dirname(path)
@@ -900,7 +836,10 @@ class App:
             if isinstance(key, tuple) and len(key) == 2 and key[0] == '_cur_':
                 # current-track cover posted by _extract_cover_bg
                 if key[1] == self.current and path and os.path.isfile(path):
-                    try: self.cover = pygame.image.load(path)
+                    try:
+                        self.cover = pygame.image.load(path)
+                        self.design._thumb_cache.clear()
+                        self.design._thumb_keys.clear()
                     except pygame.error: pass
             elif path:
                 try: self.group_covers[key] = pygame.image.load(path)
@@ -971,7 +910,10 @@ class App:
         if push: self.stack.append((self.view, self.heading, self.rows, self.sel))
         self.heading = heading; self.rows = rows; self.sel = 0; self.view = 'list'
 
-    def song_rows(self, paths): return [(self.track_title(p),'track',p) for p in paths if os.path.isfile(p)]
+    # `paths` is the library snapshot produced by scan().  Do not test the
+    # filesystem again while drawing a list: a momentary SD-card lookup miss
+    # could otherwise make an already-scanned song vanish until the next scan.
+    def song_rows(self, paths): return [(self.track_title(p),'track',p) for p in paths]
     def media_rows(self, paths): return [(os.path.splitext(os.path.basename(p))[0], 'media', p) for p in paths if os.path.isfile(p)]
 
     @staticmethod
@@ -1108,12 +1050,13 @@ class App:
             ('↻  Repeat: '+('On' if self.state.get('repeat') else 'Off'), 'repeat', None),
             ('♪  Sounds: '+('On' if self.state.get('sounds', True) else 'Off'), 'sounds', None),
             ('▶  Default view: '+('Viz' if self.state.get('default_view','tape')=='viz' else 'Cassette'), 'default_view', None),
+            ('◑  Lock dim: '+self.state.get('lock_dim','Medium'), 'lock_dim', None),
             ('Appearance', 'header', None),
             ('◑  Theme: '+self.state.get('theme','Cassette'), 'theme', None),
             ('◇  Accent color...', 'open_picker', None),
             ('◈  Dynamic visualizer: '+('On' if self.state.get('dynamic_viz') else 'Off'), 'dynamic_viz', None),
             ('Library', 'header', None),
-            ('Library database: '+('dbm' if self._metadata_backend == 'dbm' else 'JSON fallback'), 'info', None),
+            ('Library database: '+{'sqlite': 'SQLite (bundled)', 'dbm': 'dbm fallback', 'json': 'JSON fallback'}.get(self._metadata_backend, self._metadata_backend), 'info', None),
             ('▣  Browse music folders', 'folders', None),
             ('◈  Build visualizer cache', 'build_viz', None),
             ('↺  Rescan music', 'rescan', None),
@@ -1401,6 +1344,7 @@ class App:
             self.sock = None
 
     def act(self, action):
+        LOG.info('act: %s locked=%s', action, self.screen_locked)
         if self.screen_locked:
             if action == 'screen_lock_down':
                 if self._r1_down_at is None: self._r1_down_at = time.monotonic()
@@ -1531,7 +1475,7 @@ class App:
                     self.build_viz_cache()
                 elif kind == 'clear_cache':
                     self._scanning = True; self.draw(); pygame.display.flip()
-                    for cache_file in [self._cache_path, self._cache_path + '.tmp'] + glob.glob(self._dbm_path + '*'):
+                    for cache_file in MetadataStore.cache_files(self._dbm_path, self._cache_path):
                         try: os.unlink(cache_file)
                         except OSError: pass
                     self.metadata = {}; self.scan()
@@ -1563,6 +1507,11 @@ class App:
                 elif kind == 'default_view':
                     self.state['default_view'] = 'viz' if self.state.get('default_view','tape') == 'tape' else 'tape'
                     self.save(); self.settings()
+                elif kind == 'lock_dim':
+                    opts = ['Off', 'Low', 'Medium', 'Dark']
+                    cur = self.state.get('lock_dim', 'Medium')
+                    nxt = opts[(opts.index(cur) + 1) % len(opts)] if cur in opts else opts[0]
+                    self.state['lock_dim'] = nxt; self.save(); self.settings()
                 else:
                     self.state[kind] = not self.state.get(kind, False); self.save(); self.settings()
 
@@ -1601,9 +1550,32 @@ class App:
         clock = pygame.time.Clock()
         try:
             while self.running:
-                dt = min(clock.tick(30)/1000, .1)
                 raw_lock = self._poll_screen_lock()
-                events = [] if raw_lock else pygame.event.get()
+                locked = self.screen_locked
+                dt = min(clock.tick(5 if locked else 30) / 1000, .5 if locked else .1)
+
+                if locked:
+                    # Apply dim once after the lock animation finishes
+                    if not self._screen_dim_applied:
+                        if time.monotonic() - self._lock_anim_started >= 0.7:
+                            self._apply_lock_dim()
+                    # Redraw only during the animation or the one frame after it settles
+                    anim_active = (self._lock_anim_kind == 'lock' and
+                                   time.monotonic() - self._lock_anim_started < 0.7)
+                    if anim_active or not self._lock_drawn:
+                        self.draw()
+                        pygame.display.flip()
+                        if not anim_active:
+                            self._lock_drawn = True
+                    pygame.event.clear()
+                    self.poll()
+                    continue
+
+                if raw_lock:
+                    pygame.event.clear()
+                    events = []
+                else:
+                    events = pygame.event.get()
                 for e in events:
                     action = None
                     if e.type == pygame.QUIT: action = 'quit'
@@ -1623,6 +1595,7 @@ class App:
                 if self.current and not self.paused and self.loaded: self.angle = (self.angle+dt*1.5)%math.tau
                 self.draw(); pygame.display.flip()
         finally:
+            self._restore_brightness()
             self.stop(keep_mpv=self._exit_keep_mpv)
             for fd in self._lock_event_fds:
                 try: os.close(fd)

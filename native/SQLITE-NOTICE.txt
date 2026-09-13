@@ -1,0 +1,12 @@
+SQLite 3.53.4
+
+The SQLite authors have dedicated the SQLite engine to the public domain.
+Walkman bundles an unmodified build of the official SQLite amalgamation.
+
+Source: https://sqlite.org/2026/sqlite-amalgamation-3530400.zip
+Public-domain dedication: https://sqlite.org/copyright.html
+Build recipe: ../tools/build_sqlite.py
+Source checksum, compiler, flags, and binary checksum: linux-aarch64/build.json
+
+SQLite is provided without warranty. Walkman's Python adapter is covered by
+Walkman's MIT license; it is not part of the upstream SQLite project.

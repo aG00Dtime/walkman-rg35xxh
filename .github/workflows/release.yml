@@ -9,7 +9,10 @@ permissions:
   contents: write
 
 jobs:
+  test:
+    uses: ./.github/workflows/test.yml
   release:
+    needs: test
     name: Build Walkman app package
     runs-on: ubuntu-latest
     steps:

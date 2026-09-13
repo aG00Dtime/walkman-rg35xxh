@@ -28,6 +28,8 @@ class Design:
         self.fonts = {n: pygame.font.Font(path if os.path.isfile(path) else None, n) for n in (13, 15, 18, 20, 24, 28, 32)}
         self.set_theme('Cassette')
         self.shell = self.make_shell()
+        self._thumb_cache = {}
+        self._thumb_keys = []
 
     def splash(self):
         self.s.fill(BG)
@@ -119,6 +121,18 @@ class Design:
 
     def line(self, a, b, color=None, w=1):
         pygame.draw.line(self.s, LINE if color is None else color, a, b, w)
+
+    def _cached_scale(self, surface, size):
+        key = (id(surface), size[0], size[1])
+        cached = self._thumb_cache.get(key)
+        if cached is not None:
+            return cached
+        scaled = self.scale_art(surface, size)
+        self._thumb_cache[key] = scaled
+        self._thumb_keys.append(key)
+        if len(self._thumb_keys) > 48:
+            self._thumb_cache.pop(self._thumb_keys.pop(0), None)
+        return scaled
 
     @staticmethod
     def scale_art(surface, size):
@@ -297,7 +311,7 @@ class Design:
                 tsz=row_h-8; ty=y+4
                 pygame.draw.rect(self.s,BG,(25,ty,tsz,tsz),border_radius=4)
                 if cover:
-                    self.s.blit(self.scale_art(cover,(tsz,tsz)),(25,ty))
+                    self.s.blit(self._cached_scale(cover,(tsz,tsz)),(25,ty))
                 else:
                     pygame.draw.circle(self.s,MUTED if not selected else BG,(25+tsz//2,ty+tsz//2),tsz//4,2)
                 if selected:

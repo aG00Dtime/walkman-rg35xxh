@@ -14,7 +14,16 @@ These captures were taken directly from an RG35XX H running the current app.
   <img src="./screenshots/walkman-cassette.png" alt="Walkman cassette player screen" width="31%">
 </div>
 
-## Latest changes — v1.0.11
+## Next update
+
+- SQLite now comes bundled with Walkman for the RG35XX H. Copy the complete
+  app folder as usual; the library database starts working automatically.
+- Existing library information is brought across from dbm or JSON on first
+  launch. Settings shows **Library database: SQLite (bundled)** when active.
+- Scan changes are saved together, with recovery if a scan is interrupted.
+  The previous dbm and JSON caches remain available as fallbacks.
+
+## Latest release — v1.0.11
 
 - New generated album covers, artist pictures, and media thumbnails use compact
   JPEG files. The included `convert_cover_cache.py` tool converts old PNG
@@ -97,9 +106,13 @@ Settings is a fullscreen interface opened with **Y** from the Library. It
 contains playback options, themes, accent color, library rescanning, artwork
 tools, visualizer processing, and independent cache controls.
 
-Walkman intentionally uses JSON files rather than SQLite or another database.
-This keeps the app self-contained and avoids relying on additional libraries
-being installed on the handheld.
+Walkman includes its own SQLite engine for KNULLI on the RG35XX H. The library
+database is created automatically, and existing dbm or JSON library information
+is imported on first launch. Check **Library database** in Settings to see
+what is active. If SQLite cannot be used, Walkman falls back to dbm, then JSON.
+
+Your settings, favorites, and queue remain in `state.json`. Artwork and
+visualizer caches keep their compact JPEG and `.viz2` files.
 
 ### Library sections
 
@@ -120,10 +133,12 @@ if mpv's local control connection briefly drops.
 ## Device requirements
 
 - Anbernic RG35XX H.
-- KNULLI Linux installed and working on the device.
+- KNULLI Linux installed and working on the device. The bundled database is
+  tested on **KNULLI Scarab (2026/05/11), RG35XX H**.
 - PortMaster installed. Use KNULLI's PortMaster installer if it is not already
   present.
 - A system Python 3 with pygame, as provided by the KNULLI/PortMaster setup.
+- Copy the included `native` folder too; it contains Walkman's SQLite engine.
 - mpv for audio and video playback.
 - ffmpeg for artwork extraction, thumbnails, and visualizer analysis.
 - mutagen is optional; it improves metadata scanning when installed.
@@ -161,7 +176,7 @@ Walkman does not need to be reinstalled when you add files. Use this workflow:
 2. Launch Walkman and stay on the Library screen.
 3. Press **Y** to open the fullscreen **Settings** screen.
 4. Select **Rescan music** and press **A**. This refreshes both the music and
-   Media libraries and updates the JSON metadata cache.
+   Media libraries and updates the library database.
 5. Return with **B**, then open **All Songs** or **Media** to confirm the new
    files are listed.
 
@@ -213,9 +228,9 @@ adding another one. Keep only the nested path `./walkman/Walkman.sh`; a second
 entry such as `./Walkman.sh` creates duplicate Walkman items.
 
 When installing from the GitHub source ZIP rather than the release asset,
-create `roms/ports/walkman/` yourself and copy the repository's `Walkman.sh`,
-`player.py`, `design.py`, assets, `music/`, and `video/` contents into it before
-updating `gamelist.xml`.
+create `roms/ports/walkman/` yourself and copy the complete repository contents,
+including the `native/` folder and Python files, into it before updating
+`gamelist.xml`.
 
 ## Controls
 
@@ -254,6 +269,9 @@ walkman/
 ├── Walkman.sh
 ├── player.py
 ├── design.py
+├── metadata_store.py
+├── native_sqlite.py
+├── native/linux-aarch64/       # bundled SQLite engine
 ├── gameinfo.xml
 ├── cover.png
 ├── font.ttf
@@ -262,7 +280,7 @@ walkman/
 ├── video/
 ├── state.json                 # created on first run
 └── .cache/                    # created on first run
-    ├── metadata/metadata.json
+    ├── metadata/library.sqlite3
     ├── covers/*.jpg
     └── visualizer/*.viz2
 ```
@@ -272,7 +290,8 @@ your own files; personal media is never included in source or release assets.
 
 The cache is organized by function:
 
-- `metadata/metadata.json` stores tags and file information.
+- `metadata/library.sqlite3` stores tags and file information. Existing
+  `library.db*` and `metadata.json` files are retained during migration.
 - `covers/` stores compact JPEG artwork and media thumbnails.
 - `visualizer/` stores compact precomputed visualizer data for faster playback.
 
@@ -294,6 +313,10 @@ PNG files are removed only after their JPEG replacement is verified.
 
 - **Walkman does not appear:** confirm the folder is exactly
   `roms/ports/walkman/` and relaunch the Ports menu.
+- **Settings shows a database fallback:** copy the complete app folder again,
+  including `native/`, then restart Walkman. If it persists, `log.txt`
+  records why SQLite could not open. Library browsing still works with the
+  fallback. **Clear metadata cache** rebuilds library information if needed.
 - **No music or media appears:** check that files are in `music/` or `video/`,
   use a supported extension, and rescan from Settings.
 - **A video will not play:** try an H.264/AAC MP4 or a smaller resolution.
@@ -328,6 +351,10 @@ Walkman is distributed under the [MIT License](LICENSE). The bundled DejaVu
 Sans font is distributed under its own license in
 [`font-LICENSE.txt`](font-LICENSE.txt); retain that file when redistributing
 the app.
+
+The bundled SQLite engine is public domain; see
+[`native/SQLITE-NOTICE.txt`](native/SQLITE-NOTICE.txt). Build details for
+maintainers are in [`native/README.md`](native/README.md).
 
 Walkman is an independent community project and is not affiliated with
 Anbernic, KNULLI, PortMaster, or mpv.

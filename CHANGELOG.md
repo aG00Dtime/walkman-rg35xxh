@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Bundle native ARM64 SQLite with the app for KNULLI Scarab on the RG35XX H.
+  The library database works after copying the app folder, without installing
+  a Python SQLite package or any device-side database components.
+- Automatically import existing dbm/JSON metadata while keeping the originals.
+  Use transactions for scan writes and retain dbm/JSON fallback on failure.
+- Show the active database in Settings and include SQLite in metadata cleanup.
+- Verify the bundled engine when packaging; include its build recipe,
+  checksums, and attribution.
+
 ## [1.0.0] - 2026-09-12
 
 Initial public release for the Anbernic RG35XX H running KNULLI.

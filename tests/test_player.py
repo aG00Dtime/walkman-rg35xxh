@@ -110,6 +110,17 @@ class PlayerSurfaceTests(unittest.TestCase):
         self.assertEqual(player.App.search_results(data, 'Albums', 'debut')[0][0], 'Debut')
         self.assertEqual(player.App.search_results(data, 'Artists', 'another')[0][0], 'Another Artist')
 
+    def test_song_rows_preserves_the_scanned_library_snapshot(self):
+        class SongData:
+            def track_title(self, path):
+                return 'HEAVEN AND BACK'
+
+        path = '/music/[2019] Phases/07 - HEAVEN AND BACK.mp3'
+        self.assertEqual(
+            player.App.song_rows(SongData(), [path]),
+            [('HEAVEN AND BACK', 'track', path)],
+        )
+
 
 if __name__ == '__main__':
     unittest.main()
