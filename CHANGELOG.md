@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.16] - 2026-09-13
+
+- Fixed SELECT background playback getting stuck on its hand-off screen. The
+  launcher now returns to KNULLI immediately while mpv clears the sleep block
+  itself when playback ends.
+
 ## [1.0.15] - 2026-09-13
 
 - Fixed KNULLI sleeping during Walkman playback. Walkman now uses KNULLI's

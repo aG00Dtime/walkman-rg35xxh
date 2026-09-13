@@ -1199,6 +1199,12 @@ class App:
             flags = [] if self.media_type == 'video' else ['--no-video','--audio-display=no']
             cmd = ['mpv','--no-config',*flags,'--idle=yes','--keep-open=no',
                    '--input-terminal=no','--really-quiet','--input-ipc-server='+self.socket_path,'--',path]
+        # Keep the KNULLI sleep block only for this mpv lifetime. This wrapper
+        # survives SELECT background playback without keeping the launcher
+        # open, then removes the marker as soon as mpv exits.
+        if self.media_type == 'audio':
+            cmd = ['/bin/sh', '-c', '"$@"; code=$?; rm -f /var/run/battery-saver/walkman.pause; exit $code',
+                   'walkman-mpv', *cmd]
         self.proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         self._owns_mpv = True
         self.current = path; self.queue_index = start; self.position = 0.; self.duration = 0.; self.paused = False

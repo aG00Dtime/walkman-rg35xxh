@@ -27,14 +27,9 @@ WALKMAN_MPV_SOCKET="/tmp/walkman-mpv.sock"
 mkdir -p "${BATTSAVER_PAUSE%/*}"
 : > "$BATTSAVER_PAUSE"
 cleanup() {
-  # SELECT can leave mpv playing after this launcher exits. Keep the marker
-  # until Walkman's unique mpv socket disappears, then clear it automatically.
-  if [ -S "$WALKMAN_MPV_SOCKET" ]; then
-    (
-      while [ -S "$WALKMAN_MPV_SOCKET" ]; do sleep 2; done
-      rm -f "$BATTSAVER_PAUSE"
-    ) &
-  else
+  # Background mpv removes this marker itself when it stops. Do not create a
+  # watcher here: PortMaster must return immediately after SELECT.
+  if [ ! -S "$WALKMAN_MPV_SOCKET" ]; then
     rm -f "$BATTSAVER_PAUSE"
   fi
   pm_finish 2>/dev/null || true
