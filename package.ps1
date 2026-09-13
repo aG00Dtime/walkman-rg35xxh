@@ -20,6 +20,7 @@ $files = @(
   "convert_cover_cache.py",
   "gameinfo.xml",
   "README.md",
+  "CHANGELOG.md",
   "LICENSE",
   "font.ttf",
   "font-LICENSE.txt",
@@ -29,8 +30,8 @@ foreach ($file in $files) {
   Copy-Item -LiteralPath (Join-Path "." $file) -Destination (Join-Path $appFolder $file)
 }
 
-# port.json goes at the ZIP root alongside the walkman/ folder, not inside it.
-Copy-Item -LiteralPath "port.json" -Destination (Join-Path $stage "port.json")
+# Keep the release simple: extracting it gives users one walkman folder to copy
+# straight into roms/ports/.
 Copy-Item -LiteralPath "music/.gitkeep" -Destination (Join-Path $appFolder "music/.gitkeep")
 Copy-Item -LiteralPath "video/.gitkeep" -Destination (Join-Path $appFolder "video/.gitkeep")
 
@@ -75,7 +76,6 @@ try {
   $archive.Dispose()
 }
 $required = @(
-  'port.json',
   'walkman/Walkman.sh',
   'walkman/player.py',
   'walkman/design.py',
@@ -88,6 +88,7 @@ $required = @(
   'walkman/convert_cover_cache.py',
   'walkman/gameinfo.xml',
   'walkman/README.md',
+  'walkman/CHANGELOG.md',
   'walkman/LICENSE',
   'walkman/font.ttf',
   'walkman/font-LICENSE.txt',

@@ -14,53 +14,7 @@ These captures were taken directly from an RG35XX H running the current app.
   <img src="./screenshots/walkman-cassette.png" alt="Walkman cassette player screen" width="31%">
 </div>
 
-## Latest release — v1.0.12
-
-- SQLite now comes bundled with Walkman for the RG35XX H. Copy the complete
-  app folder as usual; the library database starts working automatically.
-- Existing library information is brought across from dbm or JSON on first
-  launch. Settings shows **Library database: SQLite (bundled)** when active.
-- Scan changes are saved together, with recovery if a scan is interrupted.
-  The previous dbm and JSON caches remain available as fallbacks.
-- Screen lock now dims the hardware display after its lock animation and
-  restores the previous brightness when unlocked or when Walkman closes.
-  Choose **Off**, **Low**, **Medium**, or **Dark** in Settings → Lock dim.
-- Locked playback uses a lower update rate, pauses visualizer drawing, checks
-  volume less often, and reuses list thumbnails to reduce CPU and battery use.
-
-## Latest release — v1.0.11
-
-- New generated album covers, artist pictures, and media thumbnails use compact
-  JPEG files. The included `convert_cover_cache.py` tool converts old PNG
-  caches safely; artist pictures are reduced to 128px to save more space.
-- Both visualizer and artwork conversion tools are included in release
-  packages, so existing device caches can be upgraded without rebuilding.
-
-- Visualizer caching is now lighter and faster: it streams processing instead
-  of holding whole songs in memory, uses 20 smooth bars at 6 updates per
-  second, and saves compact `.viz2` files. Existing visualizer files rebuild
-  automatically when needed.
-
-- Settings now opens immediately: the on-open storage size scan was removed.
-- Removed the unnecessary **LIBRARY** dashboard label and refreshed the
-  startup screen with a full cassette-themed Walkman splash.
-
-- Fixed the handheld controls: **SELECT** now closes the Walkman screen while
-  music keeps playing, and **START** fully exits Walkman and stops playback.
-- Added the optional **Dynamic visualizer** setting. It uses a brighter,
-  stable blend of the current cover-art colors across both the visualizer and
-  Now Playing progress bars; grayscale artwork uses the selected theme color.
-- Fixed crashes from indexed-color PNG and GIF thumbnails in media and album
-  lists. Those files now use a compatible scaler automatically.
-- Fixed incorrect controller mappings that could make SELECT behave like an
-  exit or leave START unresponsive.
-
-- Search **All Songs**, **Media**, **Albums**, and **Artists**: press **R2**
-  to open the keyboard, then **L2** to run the search.
-- Albums and Artists now use larger thumbnails. Artist photos can be fetched
-  from **Settings → Fetch artist photos...** and are kept on the device.
-- The final home card is now **Settings**. Folder browsing lives in
-  **Settings → Browse music folders**.
+For release-by-release changes, see [CHANGELOG.md](CHANGELOG.md).
 
 ## What the app does
 
@@ -154,8 +108,9 @@ if mpv's local control connection briefly drops.
 ## Installation from a release ZIP
 
 1. Download `walkman-rg35xxh.zip` from the repository's Releases page.
-2. Extract the ZIP on a computer. It contains a folder named `walkman` with
-   `Walkman.sh`, the Python player, artwork, and the empty media folders.
+2. Extract the ZIP on a computer. It contains exactly one folder named
+   `walkman`, with `Walkman.sh`, the Python player, artwork, and the empty
+   media folders.
 3. Insert the KNULLI SD card into the computer.
 4. Open the card's `roms/ports/` directory.
 5. Copy the complete `walkman` folder into `roms/ports/`. The launcher file

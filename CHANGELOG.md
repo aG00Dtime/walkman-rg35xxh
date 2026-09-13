@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+- Simplified the release archive: extract it, then copy its single `walkman`
+  folder directly into `roms/ports/`.
+
+## [1.0.11] - 2026-09-12
+
+- New generated album covers, artist pictures, and media thumbnails use compact
+  JPEG files. The included `convert_cover_cache.py` tool converts old PNG
+  caches safely; artist pictures are reduced to 128px to save more space.
+- Both visualizer and artwork conversion tools are included in release
+  packages, so existing device caches can be upgraded without rebuilding.
+- Visualizer caching is lighter and faster: it streams processing instead of
+  holding whole songs in memory, uses 20 smooth bars at 6 updates per second,
+  and saves compact `.viz2` files.
+- Settings opens immediately: the on-open storage size scan was removed.
+- Removed the unnecessary **LIBRARY** dashboard label and refreshed the startup
+  screen with a full cassette-themed Walkman splash.
+- Fixed handheld controls: **SELECT** closes the Walkman screen while music
+  keeps playing, and **START** fully exits Walkman and stops playback.
+- Added the optional **Dynamic visualizer** setting. It uses a brighter, stable
+  blend of the current cover-art colors across the visualizer and Now Playing
+  progress bars; grayscale artwork uses the selected theme color.
+- Fixed crashes from indexed-color PNG and GIF thumbnails in media and album
+  lists, and fixed incorrect controller mappings.
+- Added search for **All Songs**, **Media**, **Albums**, and **Artists**:
+  **R2** opens the keyboard and **L2** runs the search.
+- Albums and Artists use larger thumbnails. Artist photos can be fetched from
+  **Settings → Fetch artist photos...** and are kept on the device.
+- The final home card is **Settings**. Folder browsing lives in
+  **Settings → Browse music folders**.
+
 ## [1.0.12] - 2026-09-13
 
 - Bundle native ARM64 SQLite with the app for KNULLI Scarab on the RG35XX H.
