@@ -72,6 +72,17 @@ class Design:
         pygame.draw.rect(self.s, LINE, (214, 397, 212, 4), border_radius=2)
         pygame.draw.rect(self.s, AMBER, (214, 397, 104, 4), border_radius=2)
 
+    def exit_notice(self, title, detail):
+        """Short, unmistakable hand-off screen for exit and background play."""
+        self.s.fill(BG)
+        panel = pygame.Rect(58, 148, 524, 184)
+        pygame.draw.rect(self.s, PANEL, panel, border_radius=12)
+        pygame.draw.rect(self.s, LINE, panel, 2, border_radius=12)
+        pygame.draw.circle(self.s, AMBER, (320, 205), 30, 2)
+        pygame.draw.polygon(self.s, AMBER, [(313, 192), (313, 218), (335, 205)])
+        self.text(title, 320, 255, 20, WHITE, center=True)
+        self.text(detail, 320, 286, 15, MUTED, center=True)
+
     @staticmethod
     def _hsv_to_rgb(h, s, v):
         h = h % 360; i = int(h/60) % 6; f = h/60 - int(h/60)

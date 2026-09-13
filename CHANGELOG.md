@@ -4,6 +4,10 @@
 
 - Simplified the release archive: extract it, then copy its single `walkman`
   folder directly into `roms/ports/`.
+- Keep KNULLI awake while mpv is playing, including SELECT background playback
+  on systems with the standard Linux sleep inhibitor available.
+- Show a clear short notice when exiting Walkman or sending music to background
+  playback.
 
 ## [1.0.11] - 2026-09-12
 

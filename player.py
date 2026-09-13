@@ -87,6 +87,8 @@ class App:
         self.proc = None; self.sock = None; self.buffer = b''; self.pending = b''; self.loaded = False
         self.socket_path = '/tmp/walkman-mpv.sock'
         self._owns_mpv = False; self._exit_keep_mpv = False; self.current_info = {}
+        self._exit_notice = None
+        self._sleep_inhibitor = self._find_sleep_inhibitor()
         self._volume = None; self._volume_shown_until = 0.0; self._battery = None
         self._sel_flash_t = 0.0
         self._viz_bars = [0.0] * _VIZ_N
@@ -180,6 +182,25 @@ class App:
                 if channels == 2: buf.append(s)
             return pygame.mixer.Sound(buffer=buf)
         except Exception: return None
+
+    @staticmethod
+    def _find_sleep_inhibitor():
+        """Return a usable idle/sleep inhibitor, without making it required."""
+        inhibitor = shutil.which('systemd-inhibit')
+        if not inhibitor:
+            return None
+        try:
+            probe = [inhibitor, '--what=idle:sleep', '--mode=block',
+                     '--who=Walkman', '--why=Walkman playback probe', '--', 'true']
+            if subprocess.run(probe, stdin=subprocess.DEVNULL,
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                              timeout=1).returncode == 0:
+                LOG.info('sleep inhibitor available: %s', inhibitor)
+                return inhibitor
+        except (OSError, subprocess.SubprocessError):
+            pass
+        LOG.info('sleep inhibitor unavailable; continuing without it')
+        return None
 
     def _make_sweep(self, f0=200, f1=600, dur=0.06, vol=0.2):
         try:
@@ -1080,9 +1101,16 @@ class App:
         if keep_mpv: self.proc = None; self._owns_mpv = False; return
         if self._owns_mpv and self.proc:
             if self.proc.poll() is None:
-                self.proc.terminate()
+                # mpv may be running inside systemd-inhibit. Stop its whole
+                # process group so the player cannot keep running after a
+                # normal Walkman exit.
+                try: os.killpg(self.proc.pid, signal.SIGTERM)
+                except (AttributeError, OSError): self.proc.terminate()
                 try: self.proc.wait(timeout=1)
-                except subprocess.TimeoutExpired: self.proc.kill(); self.proc.wait()
+                except subprocess.TimeoutExpired:
+                    try: os.killpg(self.proc.pid, signal.SIGKILL)
+                    except (AttributeError, OSError): self.proc.kill()
+                    self.proc.wait()
         elif not self._owns_mpv and self.current:
             try:
                 s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.settimeout(1)
@@ -1191,6 +1219,12 @@ class App:
             flags = [] if self.media_type == 'video' else ['--no-video','--audio-display=no']
             cmd = ['mpv','--no-config',*flags,'--idle=yes','--keep-open=no',
                    '--input-terminal=no','--really-quiet','--input-ipc-server='+self.socket_path,'--',path]
+        # KNULLI can put the handheld to sleep while an audio-only player is
+        # idle. Keep the inhibitor alive with mpv itself so SELECT background
+        # playback remains protected after the Walkman UI exits.
+        if self._sleep_inhibitor:
+            cmd = [self._sleep_inhibitor, '--what=idle:sleep', '--mode=block',
+                   '--who=Walkman', '--why=Walkman playback is active', '--', *cmd]
         self.proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         self._owns_mpv = True
         self.current = path; self.queue_index = start; self.position = 0.; self.duration = 0.; self.paused = False
@@ -1343,8 +1377,23 @@ class App:
             except (AttributeError, OSError): pass
             self.sock = None
 
+    def _begin_exit(self, keep_mpv):
+        """Show a short confirmation before returning to KNULLI."""
+        self._exit_keep_mpv = keep_mpv
+        if keep_mpv and self.current and self.media_type == 'audio':
+            title, detail = 'PLAYING IN BACKGROUND', 'Music will keep playing'
+        elif keep_mpv:
+            title, detail = 'RETURNING TO KNULLI', 'Walkman is closing'
+        else:
+            title, detail = 'EXITING WALKMAN', 'Stopping playback'
+        LOG.info('exit requested; background=%s current=%s', keep_mpv, bool(self.current))
+        self._exit_notice = (title, detail, time.monotonic() + 0.85)
+        self._play_sound(self._snd_back)
+
     def act(self, action):
         LOG.info('act: %s locked=%s', action, self.screen_locked)
+        if self._exit_notice is not None:
+            return
         if self.screen_locked:
             if action == 'screen_lock_down':
                 if self._r1_down_at is None: self._r1_down_at = time.monotonic()
@@ -1353,8 +1402,8 @@ class App:
                     self._unlock_screen()
                 self._r1_down_at = None
             return
-        if action == 'quit': self._exit_keep_mpv = False; self.running = False
-        elif action == 'background': self._exit_keep_mpv = True; self.running = False
+        if action == 'quit': self._begin_exit(False)
+        elif action == 'background': self._begin_exit(True)
         elif action == 'screen_lock_down':
             if self.screen_locked:
                 if self._r1_down_at is None: self._r1_down_at = time.monotonic()
@@ -1516,6 +1565,9 @@ class App:
                     self.state[kind] = not self.state.get(kind, False); self.save(); self.settings()
 
     def draw(self):
+        if self._exit_notice is not None:
+            self.design.exit_notice(*self._exit_notice[:2])
+            return
         if self.screen_locked:
             self.screen.fill((3, 4, 5))
             elapsed = time.monotonic() - self._lock_anim_started
@@ -1553,6 +1605,11 @@ class App:
                 raw_lock = self._poll_screen_lock()
                 locked = self.screen_locked
                 dt = min(clock.tick(5 if locked else 30) / 1000, .5 if locked else .1)
+
+                if self._exit_notice is not None:
+                    self.draw(); pygame.display.flip()
+                    if time.monotonic() >= self._exit_notice[2]: self.running = False
+                    continue
 
                 if locked:
                     # Apply dim once after the lock animation finishes

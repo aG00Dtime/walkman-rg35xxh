@@ -30,6 +30,8 @@ For release-by-release changes, see [CHANGELOG.md](CHANGELOG.md).
 - Keeps the now-playing time and progress bar updated from mpv's playback
   position, including recovery after a temporary IPC connection failure.
 - Supports background playback when leaving the app with SELECT.
+- Prevents KNULLI's idle sleep while mpv is playing music, including after
+  SELECT sends the player to background playback.
 
 ### Media playback
 
@@ -211,7 +213,7 @@ including the `native/` folder and Python files, into it before updating
 | **R2** | Open search in All Songs, Media, Albums, or Artists |
 | **L2** | Run the current search |
 | **START** | Exit the app |
-| **SELECT** | Exit while keeping audio playing in the background |
+| **SELECT** | Show a background-playback notice, then exit while audio continues |
 | **Volume buttons** | Change device volume, including while locked |
 
 ### Video
