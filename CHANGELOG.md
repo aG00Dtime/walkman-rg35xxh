@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [1.0.12] - 2026-09-13
 
 - Bundle native ARM64 SQLite with the app for KNULLI Scarab on the RG35XX H.
   The library database works after copying the app folder, without installing
@@ -10,6 +10,10 @@
 - Show the active database in Settings and include SQLite in metadata cleanup.
 - Verify the bundled engine when packaging; include its build recipe,
   checksums, and attribution.
+- Add configurable hardware display dimming during audio screen lock and
+  restore the previous brightness after unlock or exit.
+- Reduce locked-mode update work, slow volume polling, and reuse list artwork
+  thumbnails to reduce CPU work and battery drain.
 
 ## [1.0.0] - 2026-09-12
 

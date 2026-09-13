@@ -14,7 +14,7 @@ These captures were taken directly from an RG35XX H running the current app.
   <img src="./screenshots/walkman-cassette.png" alt="Walkman cassette player screen" width="31%">
 </div>
 
-## Next update
+## Latest release — v1.0.12
 
 - SQLite now comes bundled with Walkman for the RG35XX H. Copy the complete
   app folder as usual; the library database starts working automatically.
@@ -22,6 +22,11 @@ These captures were taken directly from an RG35XX H running the current app.
   launch. Settings shows **Library database: SQLite (bundled)** when active.
 - Scan changes are saved together, with recovery if a scan is interrupted.
   The previous dbm and JSON caches remain available as fallbacks.
+- Screen lock now dims the hardware display after its lock animation and
+  restores the previous brightness when unlocked or when Walkman closes.
+  Choose **Off**, **Low**, **Medium**, or **Dark** in Settings → Lock dim.
+- Locked playback uses a lower update rate, pauses visualizer drawing, checks
+  volume less often, and reuses list thumbnails to reduce CPU and battery use.
 
 ## Latest release — v1.0.11
 
@@ -104,7 +109,8 @@ the current video and returns to the library view.
 
 Settings is a fullscreen interface opened with **Y** from the Library. It
 contains playback options, themes, accent color, library rescanning, artwork
-tools, visualizer processing, and independent cache controls.
+tools, visualizer processing, screen-lock dimming, and independent cache
+controls.
 
 Walkman includes its own SQLite engine for KNULLI on the RG35XX H. The library
 database is created automatically, and existing dbm or JSON library information
@@ -244,7 +250,7 @@ including the `native/` folder and Python files, into it before updating
 | **Y** | Open fullscreen Settings from the Library |
 | **Up / Down** | Move through lists; change visualizer style or accent hue |
 | **Left / Right** | Previous or next track on player screens |
-| **R1** | Lock the screen while audio continues |
+| **R1** | Lock the screen while audio continues and dims it using your Lock dim setting |
 | **Hold R1** | Unlock the screen; release it before starting the unlock hold |
 | **L1** | Pause or resume audio |
 | **R2** | Open search in All Songs, Media, Albums, or Artists |
@@ -335,7 +341,9 @@ PNG files are removed only after their JPEG replacement is verified.
 - **Controls seem stuck after a video:** press B once, wait for the library to
   return, and avoid pressing transport controls during the transition.
 - **Screen lock:** R1 locks only while audio is playing. Release R1, then hold
-  it again to unlock. START exits the app and does not control the lock.
+  it again to unlock. **Settings → Lock dim** controls how dark the display
+  becomes while locked; Walkman restores its prior brightness when unlocked or
+  closed. START exits the app and does not control the lock.
 
 ## Privacy and security
 
