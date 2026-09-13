@@ -508,6 +508,11 @@ class App:
                 elif kind == 1 and code == 310 and value == 1:
                     self.act('background')
                     locked_now = True
+                # Physical START is BTN_TR (311), and always closes Walkman
+                # normally (unlike SELECT, which keeps music playing).
+                elif kind == 1 and code == 311 and value == 1:
+                    self.act('quit')
+                    locked_now = True
                 # Physical L2 reports BTN_SELECT (314) and submits a search.
                 elif kind == 1 and code == 314 and value == 1:
                     if self.view == 'search': self.act('search')

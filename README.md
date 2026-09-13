@@ -14,7 +14,15 @@ These captures were taken directly from an RG35XX H running the current app.
   <img src="./screenshots/walkman-cassette.png" alt="Walkman cassette player screen" width="31%">
 </div>
 
-## Latest changes
+## Latest changes — v1.0.7
+
+- Fixed the handheld controls: **SELECT** now closes the Walkman screen while
+  music keeps playing, and **START** fully exits Walkman and stops playback.
+- Added the optional **Dynamic visualizer** setting. It uses a brighter,
+  stable blend of the current cover-art colors across the bars; grayscale
+  artwork uses the selected theme color instead.
+- Fixed incorrect controller mappings that could make SELECT behave like an
+  exit or leave START unresponsive.
 
 - Search **All Songs**, **Media**, **Albums**, and **Artists**: press **R2**
   to open the keyboard, then **L2** to run the search.
