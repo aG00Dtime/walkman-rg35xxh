@@ -14,7 +14,11 @@ These captures were taken directly from an RG35XX H running the current app.
   <img src="./screenshots/walkman-cassette.png" alt="Walkman cassette player screen" width="31%">
 </div>
 
-## Latest changes — v1.0.8
+## Latest changes — v1.0.9
+
+- Settings now opens immediately: the on-open storage size scan was removed.
+- Removed the unnecessary **LIBRARY** dashboard label and refreshed the
+  startup screen with a full cassette-themed Walkman splash.
 
 - Fixed the handheld controls: **SELECT** now closes the Walkman screen while
   music keeps playing, and **START** fully exits Walkman and stops playback.
@@ -80,8 +84,7 @@ the current video and returns to the library view.
 
 Settings is a fullscreen interface opened with **Y** from the Library. It
 contains playback options, themes, accent color, library rescanning, artwork
-tools, visualizer processing, independent cache controls, and storage totals
-for the music library, media library, cache, and all Walkman data.
+tools, visualizer processing, and independent cache controls.
 
 Walkman intentionally uses JSON files rather than SQLite or another database.
 This keeps the app self-contained and avoids relying on additional libraries

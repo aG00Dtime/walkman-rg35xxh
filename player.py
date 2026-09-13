@@ -894,38 +894,6 @@ class App:
         with open(tmp, 'w', encoding='utf-8') as _f: json.dump(self.state, _f)
         os.replace(tmp, self._state_path)
 
-    @staticmethod
-    def _directory_size(path):
-        total = 0
-        for base, _, files in os.walk(path):
-            for name in files:
-                try: total += os.path.getsize(os.path.join(base, name))
-                except OSError: pass
-        return total
-
-    @staticmethod
-    def _size_label(value):
-        value = float(value)
-        for unit in ('B', 'KB', 'MB', 'GB'):
-            if value < 1024 or unit == 'GB': return '%g %s' % (round(value, 1), unit)
-            value /= 1024
-
-    def storage_rows(self):
-        music_size = self._directory_size(MUSIC)
-        media_size = self._directory_size(VIDEO)
-        cache_size = self._directory_size(self._covers_dir)
-        total = music_size + media_size + cache_size
-        try: free = shutil.disk_usage(ROOT).free
-        except OSError: free = 0
-        return [
-            ('Music library: '+self._size_label(music_size), 'info', None),
-            ('Media library: '+self._size_label(media_size), 'info', None),
-            ('Walkman cache: '+self._size_label(cache_size), 'info', None),
-            ('Total Walkman data: '+self._size_label(total), 'info', None),
-            ('Free device space: '+self._size_label(free), 'info', None),
-            ('◈  Build visualizer cache', 'build_viz', None),
-        ]
-
     def build_viz_cache(self):
         if self._fetch_status is not None: return
         self._viz_build_cancel = False
@@ -1100,8 +1068,7 @@ class App:
             ('Library', 'header', None),
             ('Library database: '+('dbm' if self._metadata_backend == 'dbm' else 'JSON fallback'), 'info', None),
             ('▣  Browse music folders', 'folders', None),
-            ('Storage', 'header', None),
-            *self.storage_rows(),
+            ('◈  Build visualizer cache', 'build_viz', None),
             ('↺  Rescan music', 'rescan', None),
             ('⊡  Fetch cover art...', 'fetch_art_menu', None),
             ('◉  Fetch artist photos...', 'fetch_artist_art_menu', None),

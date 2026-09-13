@@ -31,29 +31,44 @@ class Design:
 
     def splash(self):
         self.s.fill(BG)
+        # Title treatment
+        self.text('WALKMAN', 320, 62, 32, WHITE, center=True)
+        self.text('PERSONAL MEDIA PLAYER', 320, 100, 13, AMBER, center=True)
+        self.line((120, 120), (520, 120))
+
+        # A full cassette, styled to match the player screen rather than a
+        # plain loading label.
+        body = pygame.Rect(76, 145, 488, 184)
+        pygame.draw.rect(self.s, PANEL, body, border_radius=12)
+        pygame.draw.rect(self.s, LINE, body, 2, border_radius=12)
+        pygame.draw.rect(self.s, tuple(min(255, c + 12) for c in BG),
+                         (100, 163, 440, 56), border_radius=6)
+        pygame.draw.rect(self.s, LINE, (100, 163, 440, 56), 1, border_radius=6)
+        self.text('SIDE A', 122, 177, 13, MUTED)
+        self.text('RG35XX H', 448, 177, 13, MUTED)
+        self.text('WALKMAN', 320, 191, 20, WHITE, center=True)
+        pygame.draw.rect(self.s, BG, (255, 224, 130, 50), border_radius=5)
+        pygame.draw.rect(self.s, LINE, (255, 224, 130, 50), 1, border_radius=5)
+
         # Reel pair
-        for x in (220, 420):
-            pygame.draw.circle(self.s,MUTED,(x,228),55,2)
-            pygame.draw.circle(self.s,BG,(x,228),50)
-            pygame.draw.circle(self.s,MUTED,(x,228),42)
-            pygame.draw.circle(self.s,PANEL,(x,228),38)
-            pygame.draw.circle(self.s,(17,18,17),(x,228),28)
+        for x in (190, 450):
+            pygame.draw.circle(self.s, MUTED, (x, 249), 55, 2)
+            pygame.draw.circle(self.s, BG, (x, 249), 50)
+            pygame.draw.circle(self.s, MUTED, (x, 249), 42)
+            pygame.draw.circle(self.s, PANEL, (x, 249), 38)
+            pygame.draw.circle(self.s, (17, 18, 17), (x, 249), 28)
             for i in range(6):
-                a=i*math.tau/6
-                pts=[]
-                for r,off in ((24,-.18),(35,-.18),(35,.18),(24,.18)):
-                    pts.append((x+math.cos(a+off)*r, 228+math.sin(a+off)*r))
-                pygame.draw.polygon(self.s,AMBER,pts)
-        # Tape window
-        pygame.draw.rect(self.s,LINE,(262,196,116,60),1,border_radius=4)
-        pygame.draw.rect(self.s,PANEL,(264,198,112,56),border_radius=3)
-        # Tape path
-        pygame.draw.line(self.s,AMBER,(220,278),(420,278),2)
-        # Titles
-        self.text('WALKMAN',320,100,32,WHITE,center=True)
-        self.text('R G 3 5 X X _ H',320,138,18,AMBER,center=True)
-        pygame.draw.line(self.s,LINE,(100,166),(540,166),1)
-        self.text('Loading library...',320,370,15,MUTED,center=True)
+                a = i * math.tau / 6
+                pts = []
+                for radius, offset in ((24, -.18), (35, -.18), (35, .18), (24, .18)):
+                    pts.append((x + math.cos(a + offset) * radius, 249 + math.sin(a + offset) * radius))
+                pygame.draw.polygon(self.s, AMBER, pts)
+            pygame.draw.circle(self.s, BG, (x, 249), 8)
+        pygame.draw.line(self.s, AMBER, (190, 291), (450, 291), 2)
+        pygame.draw.line(self.s, LINE, (122, 310), (518, 310), 1)
+        self.text('STARTING UP', 320, 371, 15, MUTED, center=True)
+        pygame.draw.rect(self.s, LINE, (214, 397, 212, 4), border_radius=2)
+        pygame.draw.rect(self.s, AMBER, (214, 397, 104, 4), border_radius=2)
 
     @staticmethod
     def _hsv_to_rgb(h, s, v):
@@ -206,7 +221,6 @@ class Design:
         self.s.fill(BG); self.text(title,23,17,18)
         batt=getattr(app,'_battery',None)
         if batt is not None: self._draw_battery(batt,596,21)
-        else: self.text('LIBRARY',614,21,13,MUTED,center=True)
         self.line((22,51),(618,51))
 
     def transport(self,x,y,paused=False):
