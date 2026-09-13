@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -58,6 +59,16 @@ class PlayerSurfaceTests(unittest.TestCase):
         art.fill(1)
         scaled = player.Design.scale_art(art, (20, 20))
         self.assertEqual(scaled.get_size(), (20, 20))
+
+    def test_compact_viz_cache_format(self):
+        self.assertEqual(player._VIZ_N, 20)
+        self.assertEqual(player._VIZ_FPS, 6)
+        with tempfile.TemporaryDirectory() as directory:
+            cache = Path(directory) / 'track.viz2'
+            cache.write_bytes(player._VIZ_CACHE_MAGIC + bytes(player._VIZ_N * 2))
+            self.assertTrue(player.App._viz_cache_valid(None, str(cache)))
+            cache.write_bytes(b'old-cache')
+            self.assertFalse(player.App._viz_cache_valid(None, str(cache)))
 
     def test_search_matches_song_metadata_media_albums_and_artists(self):
         class SearchData:

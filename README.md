@@ -14,7 +14,12 @@ These captures were taken directly from an RG35XX H running the current app.
   <img src="./screenshots/walkman-cassette.png" alt="Walkman cassette player screen" width="31%">
 </div>
 
-## Latest changes — v1.0.9
+## Latest changes — v1.0.10
+
+- Visualizer caching is now lighter and faster: it streams processing instead
+  of holding whole songs in memory, uses 20 smooth bars at 6 updates per
+  second, and saves compact `.viz2` files. Existing visualizer files rebuild
+  automatically when needed.
 
 - Settings now opens immediately: the on-open storage size scan was removed.
 - Removed the unnecessary **LIBRARY** dashboard label and refreshed the
@@ -253,7 +258,7 @@ walkman/
 └── .cache/                    # created on first run
     ├── metadata/metadata.json
     ├── covers/*.png
-    └── visualizer/*.viz
+    └── visualizer/*.viz2
 ```
 
 `music/` and `video/` are intentionally empty in the release package. Add
@@ -263,7 +268,7 @@ The cache is organized by function:
 
 - `metadata/metadata.json` stores tags and file information.
 - `covers/` stores extracted or downloaded artwork and media thumbnails.
-- `visualizer/` stores precomputed visualizer data for faster playback.
+- `visualizer/` stores compact precomputed visualizer data for faster playback.
 
 Settings can clear each cache type independently. The visualizer builder can
 be cancelled with **B** and will continue from valid cache files on a later

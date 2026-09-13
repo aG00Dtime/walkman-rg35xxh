@@ -36,13 +36,14 @@ MEDIA_EXTENSIONS = VIDEO_EXTENSIONS + IMAGE_EXTENSIONS
 LOG = logging.getLogger('walkman')
 
 
-_VIZ_N     = 26
+_VIZ_N     = 20
 _VIZ_SR    = 8000   # decode sample rate — 8kHz mono is enough for visualization
 _VIZ_WIN   = 256    # Goertzel window (longer = better freq discrimination)
-_VIZ_FPS   = 10     # analysis frames per second; display still runs at 30 fps
-_VIZ_STEP  = _VIZ_SR // _VIZ_FPS   # 800 samples between stored frames
+_VIZ_FPS   = 6      # display smoothing keeps this looking fluid at 30 fps
+_VIZ_STEP  = _VIZ_SR // _VIZ_FPS
+_VIZ_CACHE_MAGIC = b'WVZ2'
 
-# 26 target frequencies log-spaced from 40 Hz to 3800 Hz (covers bass → treble)
+# Target frequencies log-spaced from 40 Hz to 3800 Hz (covers bass → treble)
 _VIZ_FREQS = [40.0 * (3800.0/40.0)**(i/(_VIZ_N-1)) for i in range(_VIZ_N)]
 # Goertzel coefficient for each target frequency (precomputed once at startup)
 _VIZ_COEFS = [2.0 * math.cos(2.0 * math.pi * f / _VIZ_SR) for f in _VIZ_FREQS]
@@ -249,7 +250,7 @@ class App:
             for name in os.listdir(_cache_dir):
                 source = os.path.join(_cache_dir, name)
                 if not os.path.isfile(source): continue
-                target_dir = covers_dir if name.endswith('.png') else viz_dir if name.endswith('.viz') else None
+                target_dir = covers_dir if name.endswith('.png') else viz_dir if name.endswith(('.viz', '.viz2')) else None
                 if target_dir:
                     try: os.replace(source, os.path.join(target_dir, name))
                     except OSError: pass
@@ -392,7 +393,7 @@ class App:
             return
         if self._viz_data:
             frame = min(int(self.position * _VIZ_FPS), len(self._viz_data)-1)
-            targets = self._viz_data[max(0, frame)]
+            targets = [value / 255.0 for value in self._viz_data[max(0, frame)]]
         else:
             targets = [0.05 + 0.65*abs(math.sin(self._viz_t*(0.7+i*0.13)+self._viz_phases[i])) *
                        (0.5 + 0.5*abs(math.sin(self._viz_t*0.31+i*0.37))) for i in range(_VIZ_N)]
@@ -401,7 +402,29 @@ class App:
             self._viz_bars[i] += (target - self._viz_bars[i]) * min(1.0, speed * dt)
 
     def _viz_cache_path(self, path):
-        return os.path.join(self._viz_dir, hashlib.md5((path+':viz').encode()).hexdigest()+'.viz')
+        return os.path.join(self._viz_dir, hashlib.md5((path+':viz').encode()).hexdigest()+'.viz2')
+
+    def _viz_cache_valid(self, path):
+        try:
+            size = os.path.getsize(path)
+            if size <= len(_VIZ_CACHE_MAGIC) or (size - len(_VIZ_CACHE_MAGIC)) % _VIZ_N:
+                return False
+            with open(path, 'rb') as cache_file:
+                return cache_file.read(len(_VIZ_CACHE_MAGIC)) == _VIZ_CACHE_MAGIC
+        except OSError:
+            return False
+
+    @staticmethod
+    def _read_exact(stream, size):
+        chunks = []
+        remaining = size
+        while remaining:
+            chunk = stream.read(remaining)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        return b''.join(chunks)
 
     def _start_viz_analysis(self, path):
         self._viz_data = []
@@ -409,79 +432,90 @@ class App:
         tid = self._viz_track_id
         # Load from disk cache if available — instant replay
         vpath = self._viz_cache_path(path)
-        if os.path.isfile(vpath):
+        if self._viz_cache_valid(vpath):
             try:
-                flat = _array.array('f')
                 with open(vpath, 'rb') as vf:
-                    flat.fromfile(vf, os.path.getsize(vpath) // 4)
-                n = len(flat) // _VIZ_N
-                self._viz_data = [list(flat[i*_VIZ_N:(i+1)*_VIZ_N]) for i in range(n)]
+                    raw = vf.read()[len(_VIZ_CACHE_MAGIC):]
+                self._viz_data = [raw[i:i+_VIZ_N] for i in range(0, len(raw), _VIZ_N)]
                 return
-            except (OSError, EOFError): pass
+            except OSError: pass
         threading.Thread(target=self._analyze_track, args=(path, tid), daemon=True).start()
 
     def _analyze_track(self, path, track_id=None):
+        """Stream compact visualizer frames from ffmpeg into the v2 cache."""
         batch = track_id is None
         proc = subprocess.Popen(
             ['ffmpeg','-v','quiet','-i',path,'-ac','1','-ar',str(_VIZ_SR),'-f','s16le','pipe:1'],
             stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        raw = bytearray()
-        try:
-            while True:
-                if not batch and track_id != self._viz_track_id: proc.kill(); return
-                chunk = proc.stdout.read(8192)
-                if not chunk: break
-                raw.extend(chunk)
-        finally:
-            try: proc.wait(timeout=2)
-            except subprocess.TimeoutExpired: proc.kill()
-        if (not batch and track_id != self._viz_track_id) or len(raw) < _VIZ_WIN*2: return
-
-        arr = _array.array('h', bytes(raw))
-        n   = max(0, (len(arr) - _VIZ_WIN) // _VIZ_STEP + 1)
-        coefs = _VIZ_COEFS
-        scale = 32768.0 * _VIZ_WIN
-        out = []
-        self._viz_data = out  # publish the live list; the display sees frames as they land
+        vpath = self._viz_cache_path(path)
+        tmp_path = vpath + '.tmp'
+        frame_bytes = _VIZ_WIN * 2
+        skip_bytes = (_VIZ_STEP - _VIZ_WIN) * 2
+        frames = [] if not batch else None
+        count = 0
+        canceled = False
 
         if _np is not None:
             npwin = _np.hanning(_VIZ_WIN)
-            bin_lo = [max(1, round(f * _VIZ_WIN / _VIZ_SR)) for f in _VIZ_FREQS]
-            bin_hi = [max(bin_lo[i]+1, round(_VIZ_FREQS[min(i+1,_VIZ_N-1)] * _VIZ_WIN / _VIZ_SR)) for i in range(_VIZ_N)]
-            samp = _np.frombuffer(bytes(raw), dtype=_np.int16).astype(_np.float32) / 32768.0
-            for fi in range(n):
-                if not batch and track_id != self._viz_track_id: return
-                frame = samp[fi*_VIZ_STEP : fi*_VIZ_STEP+_VIZ_WIN]
-                if len(frame) < _VIZ_WIN: frame = _np.pad(frame,(0,_VIZ_WIN-len(frame)))
-                mag = _np.abs(_np.fft.rfft(frame * npwin))
-                bars = []
-                for i,(lo,hi) in enumerate(zip(bin_lo,bin_hi)):
-                    v = float(_np.mean(mag[lo:min(hi,len(mag))])) / _VIZ_WIN
-                    db = 20*math.log10(max(v, 1e-9))
-                    bars.append(max(0.0, min(1.0, (db+60)/50)))
-                out.append(bars)
+            bin_lo = [max(1, round(freq * _VIZ_WIN / _VIZ_SR)) for freq in _VIZ_FREQS]
+            bin_hi = [max(bin_lo[i] + 1, round(_VIZ_FREQS[min(i + 1, _VIZ_N - 1)] * _VIZ_WIN / _VIZ_SR)) for i in range(_VIZ_N)]
+
+            def analyze(raw):
+                mag = _np.abs(_np.fft.rfft(_np.frombuffer(raw, dtype=_np.int16).astype(_np.float32) / 32768.0 * npwin))
+                values = []
+                for low, high in zip(bin_lo, bin_hi):
+                    value = float(_np.mean(mag[low:min(high, len(mag))])) / _VIZ_WIN
+                    values.append(max(0.0, min(1.0, (20 * math.log10(max(value, 1e-9)) + 60) / 50)))
+                return bytes(round(value * 255) for value in values)
         else:
-            # Pure-Python Goertzel — yield GIL every 5 frames so the main thread keeps 30 fps
-            for fi in range(n):
-                if not batch and track_id != self._viz_track_id: return
-                if fi % 5 == 0: time.sleep(0)
-                frame = arr[fi*_VIZ_STEP : fi*_VIZ_STEP+_VIZ_WIN]
-                bars = []
+            coefs = _VIZ_COEFS
+            scale = 32768.0 * _VIZ_WIN
+
+            def analyze(raw):
+                samples = _array.array('h')
+                samples.frombytes(raw)
+                values = []
                 for coef in coefs:
                     s1 = s2 = 0.0
-                    for s in frame:
-                        s0 = s + coef*s1 - s2
+                    for sample in samples:
+                        s0 = sample + coef * s1 - s2
                         s2 = s1; s1 = s0
-                    mag = math.sqrt(max(0.0, s1*s1 + s2*s2 - coef*s1*s2)) / scale
-                    db  = 20*math.log10(max(mag, 1e-9))
-                    bars.append(max(0.0, min(1.0, (db+60)/50)))
-                out.append(bars)
-        # Save viz data to disk cache so subsequent plays are instant
-        if out and (batch or track_id == self._viz_track_id):
+                    magnitude = math.sqrt(max(0.0, s1*s1 + s2*s2 - coef*s1*s2)) / scale
+                    values.append(max(0.0, min(1.0, (20 * math.log10(max(magnitude, 1e-9)) + 60) / 50)))
+                return bytes(round(value * 255) for value in values)
+
+        try:
+            with open(tmp_path, 'wb') as cache_file:
+                cache_file.write(_VIZ_CACHE_MAGIC)
+                while True:
+                    if (batch and self._viz_build_cancel) or (not batch and track_id != self._viz_track_id):
+                        canceled = True
+                        break
+                    raw = self._read_exact(proc.stdout, frame_bytes)
+                    if len(raw) != frame_bytes:
+                        break
+                    encoded = analyze(raw)
+                    cache_file.write(encoded)
+                    if frames is not None:
+                        frames.append(encoded)
+                        self._viz_data = frames
+                    count += 1
+                    if count % 5 == 0:
+                        time.sleep(0)
+                    if skip_bytes and len(self._read_exact(proc.stdout, skip_bytes)) != skip_bytes:
+                        break
+        finally:
+            try: proc.wait(timeout=2)
+            except subprocess.TimeoutExpired: proc.kill()
+        complete = count and not canceled and (batch or track_id == self._viz_track_id)
+        if complete:
             try:
-                flat = _array.array('f', [v for frame in out for v in frame])
-                vpath = self._viz_cache_path(path)
-                with open(vpath, 'wb') as vf: flat.tofile(vf)
+                os.replace(tmp_path, vpath)
+                legacy = os.path.splitext(vpath)[0] + '.viz'
+                if os.path.isfile(legacy): os.unlink(legacy)
+            except OSError: pass
+        else:
+            try: os.unlink(tmp_path)
             except OSError: pass
 
     def _play_sound(self, snd):
@@ -908,7 +942,7 @@ class App:
                 if self._viz_build_cancel: break
                 self._fetch_status = 'Processing viz: %s\n%d of %d' % (os.path.basename(path)[:34], done+1, total)
                 vpath = self._viz_cache_path(path)
-                valid_cache = os.path.isfile(vpath) and os.path.getsize(vpath) >= _VIZ_N * 4 and os.path.getsize(vpath) % (_VIZ_N * 4) == 0
+                valid_cache = self._viz_cache_valid(vpath)
                 if not valid_cache:
                     try: self._analyze_track(path)
                     except (OSError, subprocess.SubprocessError): pass
@@ -1497,7 +1531,7 @@ class App:
                 elif kind == 'clear_viz':
                     self._scanning = True; self.draw(); pygame.display.flip()
                     import glob as _glob
-                    for f in _glob.glob(os.path.join(self._viz_dir, '*.viz')):
+                    for f in _glob.glob(os.path.join(self._viz_dir, '*.viz*')):
                         try: os.unlink(f)
                         except OSError: pass
                     self._viz_data = []
